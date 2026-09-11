@@ -1,0 +1,6 @@
+bad_flag:
+  variations:
+    enabled: true
+    label: "on"
+  defaultRule:
+    variation: enabled

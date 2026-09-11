@@ -17,7 +17,6 @@ type Config struct {
 type AppConfig struct {
 	Port        string   `mapstructure:"port"`
 	LogLevel    string   `mapstructure:"log_level"`
-	FlagsFile   string   `mapstructure:"flags_file"`
 	CorsOrigins []string `mapstructure:"cors_origins"`
 	RateLimit   int      `mapstructure:"rate_limit"`
 }
@@ -48,7 +47,6 @@ func Load() (*Config, error) {
 	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	viper.AutomaticEnv()
 
-	viper.SetDefault("app.flags_file", "config/flags.yaml")
 	viper.SetDefault("app.rate_limit", 100)
 
 	// Load .env file if present (for local development secrets)

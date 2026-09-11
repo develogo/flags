@@ -1,0 +1,13 @@
+max_items:
+  variations:
+    small: 10
+    large: 500
+  defaultRule:
+    variation: large
+
+ratio:
+  variations:
+    low: 0.25
+    high: 0.75
+  defaultRule:
+    variation: low

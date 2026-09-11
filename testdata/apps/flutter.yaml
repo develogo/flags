@@ -1,0 +1,12 @@
+dark_mode:
+  variations:
+    enabled: true
+    disabled: false
+  defaultRule:
+    variation: disabled
+
+app_version:
+  variations:
+    version: "1.0.0"
+  defaultRule:
+    variation: version

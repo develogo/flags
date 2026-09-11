@@ -1,0 +1,6 @@
+cache_enabled:
+  variations:
+    enabled: true
+    disabled: false
+  defaultRule:
+    variation: enabled

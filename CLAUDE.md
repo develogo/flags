@@ -44,7 +44,7 @@ make clean
 5. `fxserver.Module` (`internal/fx/`) — Echo instance, route registration, lifecycle hooks
 
 **Key packages**:
-- `internal/services/registry.go` — Loads flag definitions from `config/flags.yaml` at startup. Adding a flag requires editing `config/flags.yaml` (and the corresponding GOFF YAML in `flags/apps/`).
+- `internal/services/registry.go` — Loads `flags/apps/<app>.yaml` (the same GOFF files the relay serves) at startup for each app in `ServedApps`. Type is inferred from `variations`, fallback default from `defaultRule.variation`. Adding a flag = editing the GOFF YAML only.
 - `internal/services/interfaces.go` — All service interfaces. Handlers depend on these, not concrete types.
 - `internal/middleware/auth.go` — OptionalJWT: validates via Keycloak introspection if Bearer token present, otherwise falls back to device headers.
 - `internal/middleware/requestid.go` — Generates or propagates `X-Request-ID` for log correlation.
@@ -63,7 +63,6 @@ Config loaded via Viper from `config/{APP_ENV}.yaml` (APP_ENV defaults to "local
 - `log_level` — debug/info/warn/error (applied to slog)
 - `cors_origins` — list of allowed origins (default: `["*"]`)
 - `rate_limit` — requests per second per IP (default: 100)
-- `flags_file` — path to flag registry YAML (default: `config/flags.yaml`)
 
 ## Docker
 
@@ -79,4 +78,4 @@ Two images built in CI (`ci.yml`, gated by test job):
 - `flags/apps/flutter.yaml` — Flutter app flags
 - `flags/shared.yaml` — Cross-application flags (consumed by backends via GOFF SDK)
 
-**API flag registry** (`config/flags.yaml`): Defines which flags the API evaluates per app. Must stay in sync with the GOFF YAML files. All flag names use **snake_case**.
+**API flag registry**: there is no separate registry file. The API reads `flags/apps/<app>.yaml` directly for the apps listed in `ServedApps` (`internal/services/registry.go`, currently only `flutter`). Every flag must have homogeneous scalar `variations` (bool/string/int/float) and a `defaultRule.variation`; otherwise the API refuses to start. `flags/shared.yaml` is relay-only. All flag names use **snake_case**. See `docs/adr/0001-goff-yaml-fonte-unica.md`.
