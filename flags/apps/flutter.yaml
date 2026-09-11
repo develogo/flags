@@ -25,11 +25,11 @@ force_update_enabled:
     enabled: true
     disabled: false
   defaultRule:
-    variation: disabled
+    variation: enabled
 
 minimum_app_version:
   variations:
-    version: "1.0.1"
+    version: "1.1.2"
   defaultRule:
     variation: version
 
