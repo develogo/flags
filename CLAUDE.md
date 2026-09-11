@@ -1,84 +1,53 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Guidance for Claude Code when working in this repository.
 
 ## Project Overview
 
-Feature flag proxy server for BetterCity. Sits between Flutter mobile apps and a GO Feature Flag (GOFF) relay proxy, providing bulk flag evaluation with Keycloak authentication and device-context targeting. Backend services consume the GOFF relay directly via SDK — this API serves only the Flutter app.
+Feature flag proxy for BetterCity. Sits between the Flutter mobile app and a GO Feature Flag (GOFF) relay proxy: bulk flag evaluation, optional Keycloak auth, device-context targeting. Backend services consume the relay directly via SDK — this API serves only the Flutter app.
 
-**Stack**: Go 1.23+, Echo v4, Uber FX (DI), OpenFeature SDK, GO Feature Flag provider, Keycloak (gocloak), Cobra/Viper, testify.
+**Stack**: Go 1.23+, Echo v4, Uber FX (DI), OpenFeature SDK + GOFF provider, Keycloak (gocloak), Cobra/Viper, testify.
 
-## Build & Run Commands
+## Build & Run
 
-```bash
-# Start relay proxy + API server (Docker)
-make up
+`make help` lists the targets. What the Makefile does not tell you:
 
-# Run API server locally (connects to relay on localhost:1031)
-make run                  # sets APP_ENV=local automatically
-
-# Run tests
-make test                 # or: go test ./... -race -v
-
-# Build binary
-go build -o bin/server .
-
-# Stop containers
-make down
-
-# Tear down and clean
-make clean
-```
+- `make run` sets `APP_ENV=local` and expects the relay on `localhost:1031`. Run it from the repo root: `flags/apps` is resolved relative to the cwd (there is no config key for it).
+- `make up` requires the external Docker network `bettercity_local` to already exist (`docker network create bettercity_local`); compose does not create it. Relay on `:1031`, API on `:1324`.
+- `make test` runs `go test ./... -race -v`. Registry fixtures (valid and invalid GOFF files) live in `testdata/`.
 
 ## Architecture
 
-**Request flow**: `main.go` → Cobra CLI (`cmd/`) → Uber FX boots modules → Echo HTTP server starts.
+**Request flow**: `main.go` → Cobra (`cmd/`) → Uber FX modules in the order listed in `cmd/server.go` (`config` → `services` → `handlers` → `middleware` → `internal/fx` server) → Echo.
 
-**Interface-based design**: All services expose interfaces (`FeatureFlagEvaluator`, `TokenValidator`, `FlagRegistry` in `internal/services/interfaces.go`). Handlers and middleware depend on interfaces, not concrete types. FX provides concrete implementations via `fx.As` annotations.
+**Interface-based design**: every service is exposed as an interface in `internal/services/interfaces.go` (`FeatureFlagEvaluator`, `TokenValidator`, `FlagRegistry`). Handlers and middleware depend on those; FX binds the concrete types via `fx.As`. Add new services the same way.
 
-**FX module loading order** (in `cmd/server.go`):
-1. `config.Module` — Viper loads `config/{APP_ENV}.yaml`, merges env vars, loads `.env` for local dev
-2. `services.Module` — FeatureFlagService, KeycloakService, FlagRegistryService (all as interfaces)
-3. `handlers.Module` — FlagsHandler, HealthHandler
-4. `middleware.Module` — OptionalJWT auth, CORS (configurable), request logger, request ID, rate limiter
-5. `fxserver.Module` (`internal/fx/`) — Echo instance, route registration, lifecycle hooks
+**Routes** (`internal/fx/fx.go`):
+- `GET /health` — liveness, always 200
+- `GET /ready` — readiness; evaluates a flag against the relay
+- `GET /api/v1/flags?app=flutter` — bulk evaluation; `app` defaults to `flutter`
 
-**Key packages**:
-- `internal/services/registry.go` — Loads `flags/apps/<app>.yaml` (the same GOFF files the relay serves) at startup for each app in `ServedApps`. Type is inferred from `variations`, fallback default from `defaultRule.variation`. Adding a flag = editing the GOFF YAML only.
-- `internal/services/interfaces.go` — All service interfaces. Handlers depend on these, not concrete types.
-- `internal/middleware/auth.go` — OptionalJWT: validates via Keycloak introspection if Bearer token present, otherwise falls back to device headers.
-- `internal/middleware/requestid.go` — Generates or propagates `X-Request-ID` for log correlation.
-- `internal/middleware/ratelimit.go` — Token-bucket rate limiter per IP, configurable via `app.rate_limit`.
-
-**Endpoints**:
-- `GET /health` — liveness probe (always 200)
-- `GET /ready` — readiness probe (checks GOFF relay connectivity via flag evaluation)
-- `GET /api/v1/flags?app=flutter` — bulk flag evaluation; `app` param defaults to `flutter`; auth optional
+Only the `/api/v1` group gets the per-IP rate limiter (`app.rate_limit`) and `OptionalJWT` (`internal/middleware/auth.go`). `OptionalJWT` never rejects a request: a valid Bearer token enriches the client context with user claims, an invalid one is silently ignored, and the Flutter device headers (`Device-ID`, `Platform`, `App-Version`, …) are always read. `X-Request-ID` is generated or propagated on every request for log correlation.
 
 ## Configuration
 
-Config loaded via Viper from `config/{APP_ENV}.yaml` (APP_ENV defaults to "local"). Environment variables override YAML using underscore-separated paths (e.g., `KEYCLOAK_CLIENT_SECRET` → `keycloak.client_secret`). A `.env` file is loaded automatically for local development.
-
-**Key config fields** in `app`:
-- `log_level` — debug/info/warn/error (applied to slog)
-- `cors_origins` — list of allowed origins (default: `["*"]`)
-- `rate_limit` — requests per second per IP (default: 100)
-
-## Docker
-
-Two images built in CI (`ci.yml`, gated by test job):
-- **Dockerfile** — GOFF relay proxy, serves flag files from `flags/`
-- **Dockerfile.api** — Multi-stage Go build for the API server
-
-`docker-compose.yml` runs both relay + API locally. Network `bettercity_local` is created automatically.
+Viper loads `config/{APP_ENV}.yaml` (`APP_ENV` defaults to `local`); env vars override using underscore paths (`KEYCLOAK_CLIENT_SECRET` → `keycloak.client_secret`). A `.env` in the cwd is read for local secrets, but already-set env vars win over it. Fields, defaults and validation: `internal/config/config.go`.
 
 ## Flag Definitions
 
-**GOFF relay flags** (targeting rules, loaded by relay):
-- `flags/apps/flutter.yaml` — Flutter app flags
-- `flags/shared.yaml` — Cross-application flags (consumed by backends via GOFF SDK)
+The GOFF YAML files under `flags/` are the single source of truth — see `docs/adr/0001-goff-yaml-fonte-unica.md`. The relay serves all of them; the API reads only the apps listed in `ServedApps` (`internal/services/registry.go`, currently `flutter`):
 
-**API flag registry**: there is no separate registry file. The API reads `flags/apps/<app>.yaml` directly for the apps listed in `ServedApps` (`internal/services/registry.go`, currently only `flutter`). Every flag must have homogeneous scalar `variations` (bool/string/int/float) and a `defaultRule.variation`; otherwise the API refuses to start. `flags/shared.yaml` is relay-only. All flag names use **snake_case**. See `docs/adr/0001-goff-yaml-fonte-unica.md`.
+- `flags/apps/flutter.yaml` — served by relay and API
+- `flags/apps/api.yaml`, `flags/shared.yaml` — relay-only, consumed by backends via SDK. Keep them out of `ServedApps`: the API endpoint is unauthenticated.
+
+Invariants the API enforces at startup (it refuses to boot otherwise): homogeneous scalar `variations` (bool/string/int/float) and a `defaultRule.variation` naming one of them. Percentage rollouts live in `targeting` rules, so `defaultRule` always resolves to a single fallback value. Flag names are **snake_case**. Adding a flag = editing the YAML; serving a new app = one entry in `ServedApps` plus `flags/apps/<app>.yaml`.
+
+## Docker & CI
+
+- `Dockerfile` — relay image (GOFF relay proxy + `flags/` + `goff-proxy.yaml`)
+- `Dockerfile.api` — multi-stage API build; copies `config/` and `flags/` into the image
+
+`ci.yml` builds and pushes both images after the test job and opens a PR in `develogo/stacks`. Deploy details: `DEPLOYMENT.md`.
 
 ## Agent skills
 
