@@ -1,61 +1,59 @@
 package services
 
 import (
-	"better-feature-flag/internal/config"
 	"better-feature-flag/internal/models"
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
+	"sort"
 
 	"gopkg.in/yaml.v3"
 )
+
+// DefaultFlagsDir é o diretório com os arquivos GOFF por app, relativo ao cwd
+// (raiz do repo em `make run`, /app no container).
+const DefaultFlagsDir = "flags/apps"
+
+// ServedApps lista os apps que esta API serve. Cada entrada corresponde a
+// <flags dir>/<app>.yaml — o mesmo arquivo que o relay carrega. Backends
+// consomem o relay direto via SDK; os flags deles não passam por aqui.
+var ServedApps = []string{"flutter"}
 
 type FlagRegistryService struct {
 	apps   map[string][]models.FlagDefinition
 	logger *slog.Logger
 }
 
-type flagsFileSchema struct {
-	Apps map[string]struct {
-		Flags []models.FlagDefinition `yaml:"flags"`
-	} `yaml:"apps"`
+// goffFlag é o subconjunto do formato GOFF que a API precisa para montar
+// um FlagDefinition: tipo (inferido das variations) e fallback (defaultRule).
+type goffFlag struct {
+	Variations  map[string]any `yaml:"variations"`
+	DefaultRule struct {
+		Variation string `yaml:"variation"`
+	} `yaml:"defaultRule"`
 }
 
-func NewFlagRegistryService(cfg *config.Config, logger *slog.Logger) (*FlagRegistryService, error) {
-	filePath := cfg.App.FlagsFile
-	if filePath == "" {
-		filePath = "config/flags.yaml"
-	}
-
-	data, err := os.ReadFile(filePath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read flags file %s: %w", filePath, err)
-	}
-
-	var schema flagsFileSchema
-	if err := yaml.Unmarshal(data, &schema); err != nil {
-		return nil, fmt.Errorf("failed to parse flags file: %w", err)
-	}
-
-	apps := make(map[string][]models.FlagDefinition, len(schema.Apps))
-	for appName, appDef := range schema.Apps {
-		for i, flag := range appDef.Flags {
-			if flag.Name == "" {
-				return nil, fmt.Errorf("flag at index %d in app %q has no name", i, appName)
-			}
-			if !isValidFlagType(flag.Type) {
-				return nil, fmt.Errorf("flag %q in app %q has invalid type %q", flag.Name, appName, flag.Type)
-			}
+// NewFlagRegistryService carrega <dir>/<app>.yaml para cada app em apps.
+// Falha no startup se um arquivo estiver ausente ou um flag não tiver
+// variations homogêneas de tipo escalar e um defaultRule.variation válido.
+func NewFlagRegistryService(dir string, apps []string, logger *slog.Logger) (*FlagRegistryService, error) {
+	registry := make(map[string][]models.FlagDefinition, len(apps))
+	for _, appName := range apps {
+		filePath := filepath.Join(dir, appName+".yaml")
+		flags, err := loadGoffFlags(filePath)
+		if err != nil {
+			return nil, fmt.Errorf("app %q: %w", appName, err)
 		}
-		apps[appName] = appDef.Flags
+		registry[appName] = flags
 	}
 
-	logger.Info("flag registry loaded", slog.Int("apps", len(apps)))
-	for appName, flags := range apps {
+	logger.Info("flag registry loaded", slog.Int("apps", len(registry)))
+	for appName, flags := range registry {
 		logger.Info("registered app flags", slog.String("app", appName), slog.Int("flags", len(flags)))
 	}
 
-	return &FlagRegistryService{apps: apps, logger: logger}, nil
+	return &FlagRegistryService{apps: registry, logger: logger}, nil
 }
 
 func (r *FlagRegistryService) GetFlagsForApp(appName string) ([]models.FlagDefinition, error) {
@@ -75,11 +73,83 @@ func (r *FlagRegistryService) GetAnyFlags() ([]models.FlagDefinition, error) {
 	return nil, fmt.Errorf("no flags registered")
 }
 
-func isValidFlagType(t models.FlagValueType) bool {
-	switch t {
-	case models.FlagValueTypeBool, models.FlagValueTypeString,
-		models.FlagValueTypeInt, models.FlagValueTypeFloat:
-		return true
+func loadGoffFlags(filePath string) ([]models.FlagDefinition, error) {
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read flags file: %w", err)
 	}
-	return false
+
+	var file map[string]goffFlag
+	if err := yaml.Unmarshal(data, &file); err != nil {
+		return nil, fmt.Errorf("failed to parse flags file %s: %w", filePath, err)
+	}
+
+	defs := make([]models.FlagDefinition, 0, len(file))
+	for name, flag := range file {
+		def, err := toFlagDefinition(name, flag)
+		if err != nil {
+			return nil, fmt.Errorf("flag %q in %s: %w", name, filePath, err)
+		}
+		defs = append(defs, def)
+	}
+
+	// YAML maps não preservam ordem; ordena para resposta e logs determinísticos.
+	sort.Slice(defs, func(i, j int) bool { return defs[i].Name < defs[j].Name })
+	return defs, nil
+}
+
+func toFlagDefinition(name string, flag goffFlag) (models.FlagDefinition, error) {
+	flagType, err := inferFlagType(flag.Variations)
+	if err != nil {
+		return models.FlagDefinition{}, err
+	}
+
+	variation := flag.DefaultRule.Variation
+	if variation == "" {
+		return models.FlagDefinition{}, fmt.Errorf("defaultRule.variation is required (the API needs a single fallback value)")
+	}
+	defaultValue, ok := flag.Variations[variation]
+	if !ok {
+		return models.FlagDefinition{}, fmt.Errorf("defaultRule.variation %q is not a declared variation", variation)
+	}
+
+	return models.FlagDefinition{Name: name, Type: flagType, Default: defaultValue}, nil
+}
+
+// inferFlagType deriva o tipo do flag dos valores das variations. Todas
+// precisam ter o mesmo tipo escalar; int não é promovido para float.
+func inferFlagType(variations map[string]any) (models.FlagValueType, error) {
+	if len(variations) == 0 {
+		return "", fmt.Errorf("variations cannot be empty")
+	}
+
+	var flagType models.FlagValueType
+	for variation, value := range variations {
+		valueType, ok := scalarFlagType(value)
+		if !ok {
+			return "", fmt.Errorf("variation %q has invalid type %T (expected bool, string, int or float)", variation, value)
+		}
+		if flagType == "" {
+			flagType = valueType
+			continue
+		}
+		if valueType != flagType {
+			return "", fmt.Errorf("variations have mixed types (%s and %s)", flagType, valueType)
+		}
+	}
+	return flagType, nil
+}
+
+func scalarFlagType(value any) (models.FlagValueType, bool) {
+	switch value.(type) {
+	case bool:
+		return models.FlagValueTypeBool, true
+	case string:
+		return models.FlagValueTypeString, true
+	case int, int64:
+		return models.FlagValueTypeInt, true
+	case float64:
+		return models.FlagValueTypeFloat, true
+	}
+	return "", false
 }

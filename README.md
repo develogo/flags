@@ -152,36 +152,20 @@ Um arquivo `.env` na raiz é carregado automaticamente para desenvolvimento loca
 | `app.log_level` | Nível de log (`debug`, `info`, `warn`, `error`) | `info` |
 | `app.cors_origins` | Lista de origens permitidas | `["*"]` |
 | `app.rate_limit` | Requests por segundo por IP | `100` |
-| `app.flags_file` | Caminho do registry de flags | `config/flags.yaml` |
 | `goff.endpoint` | URL do relay proxy | — |
 | `keycloak.url` | URL do Keycloak | — |
 | `keycloak.realm` | Realm do Keycloak | — |
 | `keycloak.client_id` | Client ID | — |
 | `keycloak.client_secret` | Client secret (usar env var) | — |
 
-### Flag Registry (`config/flags.yaml`)
+### Apps servidos
 
-Define quais flags a API avalia por aplicação:
+A API serve apenas os apps listados em `ServedApps` (`internal/services/registry.go`) — hoje só `flutter`. Para cada um, lê `flags/apps/<app>.yaml` no startup: o mesmo arquivo que o relay carrega. Não existe registry separado.
 
-```yaml
-apps:
-  flutter:
-    flags:
-      - name: dark_mode
-        type: bool
-        default: false
-      - name: maintenance_mode
-        type: bool
-        default: false
-      - name: feedback_enabled
-        type: bool
-        default: true
-      - name: minimum_app_version
-        type: string
-        default: "1.0.0"
-```
+- **Tipo** do flag: inferido dos valores em `variations` (todos do mesmo tipo escalar: `bool`, `string`, `int` ou `float`).
+- **Fallback** (usado se o relay estiver fora): o valor de `defaultRule.variation`, obrigatório.
 
-Tipos suportados: `bool`, `string`, `int`, `float`.
+Qualquer violação impede o servidor de subir. Ver `docs/adr/0001-goff-yaml-fonte-unica.md`.
 
 ### Flag YAML (GOFF relay)
 
@@ -209,19 +193,7 @@ nova_feature:
     variation: disabled
 ```
 
-2. Registre no flag registry (`config/flags.yaml`):
-
-```yaml
-apps:
-  flutter:
-    flags:
-      # ... flags existentes
-      - name: nova_feature
-        type: bool
-        default: false
-```
-
-3. Redeploy o serviço. A flag estará disponível no endpoint `/api/v1/flags`.
+2. Redeploy o serviço. A flag estará disponível no endpoint `/api/v1/flags`.
 
 ### Exemplos de Targeting
 

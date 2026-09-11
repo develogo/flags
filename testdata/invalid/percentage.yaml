@@ -1,0 +1,8 @@
+rollout:
+  variations:
+    enabled: true
+    disabled: false
+  defaultRule:
+    percentage:
+      enabled: 50
+      disabled: 50

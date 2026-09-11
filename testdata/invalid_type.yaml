@@ -1,6 +1,0 @@
-apps:
-  test:
-    flags:
-      - name: bad_flag
-        type: invalid
-        default: false

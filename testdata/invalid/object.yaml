@@ -1,0 +1,6 @@
+config_blob:
+  variations:
+    a: {key: value}
+    b: {key: other}
+  defaultRule:
+    variation: a
