@@ -79,3 +79,17 @@ Two images built in CI (`ci.yml`, gated by test job):
 - `flags/shared.yaml` — Cross-application flags (consumed by backends via GOFF SDK)
 
 **API flag registry**: there is no separate registry file. The API reads `flags/apps/<app>.yaml` directly for the apps listed in `ServedApps` (`internal/services/registry.go`, currently only `flutter`). Every flag must have homogeneous scalar `variations` (bool/string/int/float) and a `defaultRule.variation`; otherwise the API refuses to start. `flags/shared.yaml` is relay-only. All flag names use **snake_case**. See `docs/adr/0001-goff-yaml-fonte-unica.md`.
+
+## Agent skills
+
+### Issue tracker
+
+Issues and specs live as local markdown files under `.scratch/<feature>/`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default vocabulary: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: `CONTEXT.md` at the repo root plus `docs/adr/`. See `docs/agents/domain.md`.
