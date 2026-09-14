@@ -1,6 +1,7 @@
 # ADR 0001 — Os YAML do GOFF são a única fonte de definição de flags
 
-**Data:** 2026-09-11 · **Status:** aceito
+**Data:** 2026-09-11 · **Status:** aceito; itens 3 e 4 alterados pela
+[ADR 0002](0002-servico-multi-app-flag-set-por-app.md)
 
 ## Contexto
 
