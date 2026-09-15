@@ -4,7 +4,7 @@ Guidance for Claude Code when working in this repository.
 
 ## Project Overview
 
-Feature flag proxy for BetterCity. Sits between the Flutter mobile app and a GO Feature Flag (GOFF) relay proxy: bulk flag evaluation, targeting from client-declared headers. Backend services consume the relay directly via SDK — this API serves only the Flutter app.
+Feature flag service shared across projects (BetterCity and others), on top of a GO Feature Flag (GOFF) relay. Each **App** has its own flag file and flag set. Backends on the internal network read the relay directly via the OpenFeature SDK; this API is the only public part and serves bulk evaluation of **public apps** to mobile/web clients, with targeting from client-declared headers. No authentication anywhere: flags never hold secrets. Glossary: `CONTEXT.md`.
 
 **Stack**: Go 1.23+, Echo v4, Uber FX (DI), OpenFeature SDK + GOFF provider, Cobra/Viper, testify.
 
@@ -15,6 +15,7 @@ Feature flag proxy for BetterCity. Sits between the Flutter mobile app and a GO 
 - `make run` sets `APP_ENV=local` and expects the relay on `localhost:1031`. Run it from the repo root: `flags/apps` is resolved relative to the cwd (there is no config key for it).
 - `make up` requires the external Docker network `bettercity_local` to already exist (`docker network create bettercity_local`); compose does not create it. Relay on `:1031`, API on `:1324`.
 - `make test` runs `go test ./... -race -v`. Registry fixtures (valid and invalid GOFF files) live in `testdata/`.
+- `go run . relay-config` prints the relay config the relay image is built with (`--apps-dir`, `-o`).
 
 ## Architecture
 
@@ -27,7 +28,7 @@ Feature flag proxy for BetterCity. Sits between the Flutter mobile app and a GO 
 - `GET /ready` — readiness; evaluates a flag against the relay
 - `GET /api/v1/flags?app=<app>` — bulk evaluation; missing `app` or `app=flutter` resolves to `bettercity-flutter` (legacy alias, handler only)
 
-Only the `/api/v1` group gets the per-IP rate limiter (`app.rate_limit`) and `ClientContext` (`internal/middleware/clientcontext.go`). It never rejects a request and has no auth: it reads the device headers (`Device-ID`, `Platform`, `App-Version`, …) plus optional `User-ID`; `Authorization` is ignored. Targeting key is `User-ID`, else `Device-ID`. `X-Request-ID` is generated or propagated on every request for log correlation.
+Only the `/api/v1` group gets the per-IP rate limiter (`app.rate_limit`) and `ClientContext` (`internal/middleware/clientcontext.go`). It never rejects a request and has no auth: it reads the device headers (`Device-ID`, `Platform`, `App-Version`, …) plus optional `User-ID`; `Authorization` is ignored. Targeting key is `User-ID`, else `Device-ID`, else `anonymous`. `X-Request-ID` is generated or propagated on every request for log correlation.
 
 ## Configuration
 
@@ -40,12 +41,14 @@ The GOFF YAML files under `flags/apps/` are the single source of truth — see `
 - `flags/apps/bettercity-flutter.yaml` — served by relay and API
 - `flags/apps/bettercity-api.yaml` — relay-only, consumed by the backend via SDK with `APIKey: "bettercity-api"`. Keep it out of `ServedApps`: the API endpoint is unauthenticated.
 
-Invariants the API enforces at startup (it refuses to boot otherwise): homogeneous scalar `variations` (bool/string/int/float) and a `defaultRule.variation` naming one of them. Percentage rollouts live in `targeting` rules, so `defaultRule` always resolves to a single fallback value. Flag names are **snake_case**. Adding a flag = editing the YAML; serving a new app = one entry in `ServedApps` plus `flags/apps/<app>.yaml`.
+Invariants the API enforces at startup (it refuses to boot otherwise): homogeneous scalar `variations` (bool/string/int/float) and a `defaultRule.variation` naming one of them. Percentage rollouts live in `targeting` rules, so `defaultRule` always resolves to a single fallback value. Flag names are **snake_case**. Only public apps are checked at boot (a broken private file never blocks it); `TestFlagRegistry_LoadsAllRealApps` checks every file in CI. Adding a flag = editing the YAML. Adding an app = creating `flags/apps/<project>-<app>.yaml` (the relay picks it up at image build). Making it public = adding it to `ServedApps`; never put backend kill switches in a public app. Unknown and non-public apps get the same 400, so private names don't leak.
 
 ## Docker & CI
 
-- `Dockerfile` — relay image: a Go stage runs `relay-config` to generate the relay config (one flag set per app); the pinned GOFF image gets `flags/` + the generated config. There is no versioned relay config file
+- `Dockerfile` — relay image: a Go stage runs `relay-config` to generate the relay config (one flag set per app); the pinned GOFF image gets `flags/` + the generated config. There is no versioned relay config file. In production the relay has no public endpoint (local compose publishes `:1031`)
 - `Dockerfile.api` — multi-stage API build; copies `config/` and `flags/` into the image
+
+Flags are baked into both images: any flag change needs a build and deploy.
 
 `ci.yml` builds and pushes both images after the test job and opens a PR in `develogo/stacks`. Deploy details: `DEPLOYMENT.md`.
 
