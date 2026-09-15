@@ -1,7 +1,7 @@
 package services
 
 import (
-	"better-feature-flag/internal/config"
+	"flags/internal/config"
 	"log/slog"
 
 	"go.uber.org/fx"

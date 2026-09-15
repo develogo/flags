@@ -1,10 +1,10 @@
 package fx
 
 import (
-	"better-feature-flag/internal/config"
-	"better-feature-flag/internal/handlers"
-	"better-feature-flag/internal/middleware"
 	"context"
+	"flags/internal/config"
+	"flags/internal/handlers"
+	"flags/internal/middleware"
 	"log/slog"
 	"os"
 
@@ -65,7 +65,7 @@ type RouteParams struct {
 
 func RegisterRoutes(p RouteParams) {
 	// Log startup
-	p.Logger.Info("Starting Better Feature Flag")
+	p.Logger.Info("Starting flags")
 	p.Logger.Info("configuration loaded",
 		slog.String("goff_endpoint", p.Config.Goff.Endpoint),
 		slog.String("port", p.Config.App.Port),

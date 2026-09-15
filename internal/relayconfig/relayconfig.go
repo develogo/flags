@@ -2,8 +2,8 @@
 package relayconfig
 
 import (
-	"better-feature-flag/internal/services"
 	"bytes"
+	"flags/internal/services"
 	"path"
 	"path/filepath"
 

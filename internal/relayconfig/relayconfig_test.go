@@ -1,7 +1,7 @@
 package relayconfig_test
 
 import (
-	"better-feature-flag/internal/relayconfig"
+	"flags/internal/relayconfig"
 	"path/filepath"
 	"testing"
 

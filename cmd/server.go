@@ -1,12 +1,12 @@
 package cmd
 
 import (
-	"better-feature-flag/internal/config"
-	"better-feature-flag/internal/handlers"
-	"better-feature-flag/internal/middleware"
-	"better-feature-flag/internal/services"
+	"flags/internal/config"
+	"flags/internal/handlers"
+	"flags/internal/middleware"
+	"flags/internal/services"
 
-	fxserver "better-feature-flag/internal/fx"
+	fxserver "flags/internal/fx"
 
 	"github.com/spf13/cobra"
 	"go.uber.org/fx"

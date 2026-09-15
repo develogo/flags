@@ -1,8 +1,8 @@
 package cmd
 
 import (
-	"better-feature-flag/internal/relayconfig"
-	"better-feature-flag/internal/services"
+	"flags/internal/relayconfig"
+	"flags/internal/services"
 	"os"
 
 	"github.com/spf13/cobra"

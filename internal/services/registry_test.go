@@ -1,8 +1,8 @@
 package services_test
 
 import (
-	"better-feature-flag/internal/models"
-	"better-feature-flag/internal/services"
+	"flags/internal/models"
+	"flags/internal/services"
 	"log/slog"
 	"os"
 	"path/filepath"

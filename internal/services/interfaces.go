@@ -1,8 +1,8 @@
 package services
 
 import (
-	"better-feature-flag/internal/models"
 	"context"
+	"flags/internal/models"
 )
 
 type FeatureFlagEvaluator interface {

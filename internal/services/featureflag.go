@@ -1,9 +1,9 @@
 package services
 
 import (
-	"better-feature-flag/internal/config"
-	"better-feature-flag/internal/models"
 	"context"
+	"flags/internal/config"
+	"flags/internal/models"
 	"fmt"
 	"log/slog"
 

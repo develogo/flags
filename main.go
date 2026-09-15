@@ -1,7 +1,7 @@
 package main
 
 import (
-	"better-feature-flag/cmd"
+	"flags/cmd"
 )
 
 func main() {

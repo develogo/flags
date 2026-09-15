@@ -40,8 +40,8 @@ O relay não recebe variáveis: tudo vem da config gerada no build.
 ## Local (Docker Compose)
 
 ```bash
-docker network create bettercity_local   # uma vez
-make up                                  # builda relay + API na primeira vez; use --build depois de mudar flags
+docker network create flags_local   # uma vez
+make up                             # builda relay + API na primeira vez; use --build depois de mudar flags
 ```
 
 ```bash
@@ -72,6 +72,8 @@ As duas chamadas de flags devem retornar as flags de `flags/apps/bettercity-flut
 ## Rollback
 
 Reverta o PR de imagens na stack em `develogo/stacks` (ou aponte as imagens para a tag anterior) e reaplique. Relay e API podem voltar juntos: as imagens de um mesmo commit sempre concordam sobre quais apps existem.
+
+As imagens até a renomeação genérica foram publicadas como `develogo/bettercity-flags` (relay) e `develogo/better-feature-flag` (API), na stack `stacks/bettercity-feature-flag`; um rollback para antes dela aponta para esses nomes.
 
 ## Troubleshooting
 
