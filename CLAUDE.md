@@ -4,9 +4,9 @@ Guidance for Claude Code when working in this repository.
 
 ## Project Overview
 
-Feature flag proxy for BetterCity. Sits between the Flutter mobile app and a GO Feature Flag (GOFF) relay proxy: bulk flag evaluation, optional Keycloak auth, device-context targeting. Backend services consume the relay directly via SDK — this API serves only the Flutter app.
+Feature flag proxy for BetterCity. Sits between the Flutter mobile app and a GO Feature Flag (GOFF) relay proxy: bulk flag evaluation, targeting from client-declared headers. Backend services consume the relay directly via SDK — this API serves only the Flutter app.
 
-**Stack**: Go 1.23+, Echo v4, Uber FX (DI), OpenFeature SDK + GOFF provider, Keycloak (gocloak), Cobra/Viper, testify.
+**Stack**: Go 1.23+, Echo v4, Uber FX (DI), OpenFeature SDK + GOFF provider, Cobra/Viper, testify.
 
 ## Build & Run
 
@@ -20,18 +20,18 @@ Feature flag proxy for BetterCity. Sits between the Flutter mobile app and a GO 
 
 **Request flow**: `main.go` → Cobra (`cmd/`) → Uber FX modules in the order listed in `cmd/server.go` (`config` → `services` → `handlers` → `middleware` → `internal/fx` server) → Echo.
 
-**Interface-based design**: every service is exposed as an interface in `internal/services/interfaces.go` (`FeatureFlagEvaluator`, `TokenValidator`, `FlagRegistry`). Handlers and middleware depend on those; FX binds the concrete types via `fx.As`. Add new services the same way.
+**Interface-based design**: every service is exposed as an interface in `internal/services/interfaces.go` (`FeatureFlagEvaluator`, `FlagRegistry`). Handlers depend on those; FX binds the concrete types via `fx.As`. Add new services the same way.
 
 **Routes** (`internal/fx/fx.go`):
 - `GET /health` — liveness, always 200
 - `GET /ready` — readiness; evaluates a flag against the relay
 - `GET /api/v1/flags?app=flutter` — bulk evaluation; `app` defaults to `flutter`
 
-Only the `/api/v1` group gets the per-IP rate limiter (`app.rate_limit`) and `OptionalJWT` (`internal/middleware/auth.go`). `OptionalJWT` never rejects a request: a valid Bearer token enriches the client context with user claims, an invalid one is silently ignored, and the Flutter device headers (`Device-ID`, `Platform`, `App-Version`, …) are always read. `X-Request-ID` is generated or propagated on every request for log correlation.
+Only the `/api/v1` group gets the per-IP rate limiter (`app.rate_limit`) and `ClientContext` (`internal/middleware/clientcontext.go`). It never rejects a request and has no auth: it reads the device headers (`Device-ID`, `Platform`, `App-Version`, …) plus optional `User-ID`; `Authorization` is ignored. Targeting key is `User-ID`, else `Device-ID`. `X-Request-ID` is generated or propagated on every request for log correlation.
 
 ## Configuration
 
-Viper loads `config/{APP_ENV}.yaml` (`APP_ENV` defaults to `local`); env vars override using underscore paths (`KEYCLOAK_CLIENT_SECRET` → `keycloak.client_secret`). A `.env` in the cwd is read for local secrets, but already-set env vars win over it. Fields, defaults and validation: `internal/config/config.go`.
+Viper loads `config/{APP_ENV}.yaml` (`APP_ENV` defaults to `local`); env vars override using underscore paths (`GOFF_ENDPOINT` → `goff.endpoint`). A `.env` in the cwd is read for local secrets, but already-set env vars win over it. Fields, defaults and validation: `internal/config/config.go`.
 
 ## Flag Definitions
 

@@ -16,7 +16,6 @@ services:
       - "1324:80"
     environment:
       - APP_ENV=local
-      - KEYCLOAK_CLIENT_SECRET=${KEYCLOAK_CLIENT_SECRET}
     depends_on:
       - relay
     restart: unless-stopped

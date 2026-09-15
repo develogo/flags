@@ -24,10 +24,10 @@ O projeto usa **interfaces** para desacoplamento total entre camadas:
 internal/
 ├── config/              # Configuração via Viper (YAML + env vars + .env)
 ├── handlers/            # HTTP handlers (flags, health)
-├── models/              # Tipos compartilhados (FlagDefinition, TokenClaims, ClientContext)
-├── middleware/           # Auth (JWT opcional), CORS, rate limiting, request ID, logging
-├── services/            # Interfaces + implementações (FeatureFlag, Keycloak, FlagRegistry)
-│   └── interfaces.go    # FeatureFlagEvaluator, TokenValidator, FlagRegistry
+├── models/              # Tipos compartilhados (FlagDefinition, ClientContext)
+├── middleware/           # Contexto do cliente (headers), CORS, rate limiting, request ID, logging
+├── services/            # Interfaces + implementações (FeatureFlag, FlagRegistry)
+│   └── interfaces.go    # FeatureFlagEvaluator, FlagRegistry
 └── fx/                  # Uber FX — DI, rotas, lifecycle
 ```
 
@@ -55,13 +55,10 @@ make clean    # Remove tudo
 # 1. Instalar dependências
 go mod download
 
-# 2. Configurar secrets (criar arquivo .env na raiz)
-echo "KEYCLOAK_CLIENT_SECRET=sua-chave-aqui" > .env
-
-# 3. Subir o relay proxy
+# 2. Subir o relay proxy
 docker-compose up -d relay
 
-# 4. Rodar a API
+# 3. Rodar a API
 APP_ENV=local go run main.go server
 ```
 
@@ -91,7 +88,7 @@ O parâmetro `app` define qual conjunto de flags retornar (default: `flutter`).
 
 | Header | Descrição | Obrigatório |
 |--------|-----------|-------------|
-| `Authorization` | `Bearer <token>` — JWT do Keycloak | Opcional |
+| `User-ID` | Identificador do usuário; vira a targeting key quando presente | Opcional |
 | `Device-ID` | Identificador do dispositivo | Opcional |
 | `Platform` | `android` ou `ios` | Opcional |
 | `Platform-Version` | Versão do SO | Opcional |
@@ -142,7 +139,7 @@ curl http://localhost:1324/api/v1/flags?app=flutter \
 
 ### Config YAML
 
-Carregado de `config/{APP_ENV}.yaml` (default: `local`). Variáveis de ambiente sobrescrevem valores YAML (ex: `KEYCLOAK_CLIENT_SECRET` → `keycloak.client_secret`).
+Carregado de `config/{APP_ENV}.yaml` (default: `local`). Variáveis de ambiente sobrescrevem valores YAML (ex: `GOFF_ENDPOINT` → `goff.endpoint`).
 
 Um arquivo `.env` na raiz é carregado automaticamente para desenvolvimento local.
 
@@ -153,10 +150,6 @@ Um arquivo `.env` na raiz é carregado automaticamente para desenvolvimento loca
 | `app.cors_origins` | Lista de origens permitidas | `["*"]` |
 | `app.rate_limit` | Requests por segundo por IP | `100` |
 | `goff.endpoint` | URL do relay proxy | — |
-| `keycloak.url` | URL do Keycloak | — |
-| `keycloak.realm` | Realm do Keycloak | — |
-| `keycloak.client_id` | Client ID | — |
-| `keycloak.client_secret` | Client secret (usar env var) | — |
 
 ### Apps servidos
 
@@ -247,16 +240,15 @@ class FeatureFlagService {
 
   FeatureFlagService({required this.baseUrl});
 
-  Future<Map<String, dynamic>> getFlags({String? authToken}) async {
+  Future<Map<String, dynamic>> getFlags({String? userId}) async {
     final headers = <String, String>{
       'Platform': Platform.isAndroid ? 'android' : 'ios',
       'App-Version': packageInfo.version,
+      'Device-ID': await getDeviceId(),
     };
 
-    if (authToken != null) {
-      headers['Authorization'] = 'Bearer $authToken';
-    } else {
-      headers['Device-ID'] = await getDeviceId();
+    if (userId != null) {
+      headers['User-ID'] = userId;
     }
 
     final response = await http.get(

@@ -46,7 +46,6 @@ func (h *FlagsHandler) GetFlags(c echo.Context) error {
 		slog.String("targeting_key", clientCtx.GetTargetingKey()),
 		slog.String("app_version", clientCtx.AppVersion),
 		slog.String("platform", clientCtx.Platform),
-		slog.Bool("authenticated", clientCtx.IsAuthenticated()),
 	)
 
 	flags, err := h.evaluator.EvaluateFlags(ctx, appName, flagDefs, clientCtx)

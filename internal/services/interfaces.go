@@ -10,10 +10,6 @@ type FeatureFlagEvaluator interface {
 	HealthCheck(ctx context.Context, app string, flags []models.FlagDefinition) error
 }
 
-type TokenValidator interface {
-	ValidateToken(ctx context.Context, token string) (*models.TokenClaims, error)
-}
-
 type FlagRegistry interface {
 	GetFlagsForApp(appName string) ([]models.FlagDefinition, error)
 	GetAnyApp() (string, []models.FlagDefinition, error)

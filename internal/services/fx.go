@@ -17,10 +17,6 @@ var Module = fx.Module("services",
 			fx.As(new(FeatureFlagEvaluator)),
 		),
 		fx.Annotate(
-			NewKeycloakService,
-			fx.As(new(TokenValidator)),
-		),
-		fx.Annotate(
 			newDefaultFlagRegistry,
 			fx.As(new(FlagRegistry)),
 		),

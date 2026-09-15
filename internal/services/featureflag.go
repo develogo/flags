@@ -163,11 +163,10 @@ func (s *FeatureFlagService) buildEvaluationContext(clientCtx *models.ClientCont
 		"platform":    clientCtx.Platform,
 	}
 
-	if clientCtx.IsAuthenticated() {
+	if clientCtx.UserID != "" {
 		attributes["user_id"] = clientCtx.UserID
-		attributes["email"] = clientCtx.Email
-		attributes["username"] = clientCtx.Username
-	} else {
+	}
+	if clientCtx.DeviceID != "" {
 		attributes["device_id"] = clientCtx.DeviceID
 	}
 

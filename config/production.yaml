@@ -10,9 +10,3 @@ app:
 goff:
   endpoint: "http://relay:1031"
   environment: "production"
-
-keycloak:
-  url: "https://auth.bettercity.app/"
-  realm: "bettercity"
-  client_id: "better-feature-flag"
-  client_secret: "" # Overridden by KEYCLOAK_CLIENT_SECRET env var in production

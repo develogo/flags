@@ -10,7 +10,7 @@ import (
 var rootCmd = &cobra.Command{
 	Use:   "better-feature-flag",
 	Short: "A feature flag proxy server",
-	Long:  `A feature flag proxy server that integrates with GO Feature Flag and Keycloak for authentication.`,
+	Long:  `A feature flag proxy server that integrates with GO Feature Flag.`,
 }
 
 func Execute() {

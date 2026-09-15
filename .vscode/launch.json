@@ -15,14 +15,9 @@
                 "server"
             ],
             "env": {
-                "JWT_SECRET": "minha-chave-secreta-super-segura",
                 "SERVER_PORT": "1324",
                 "GOFF_ENDPOINT": "http://localhost:1031",
-                "ENVIRONMENT": "development",
-                "KEYCLOAK_URL": "https://auth.bettercity.app/",
-                "KEYCLOAK_REALM": "bettercity",
-                "KEYCLOAK_CLIENT_ID": "better-feature-flag",
-                "KEYCLOAK_CLIENT_SECRET": "t3D4NeUXweCYTYOrX9UfFDoV7TjGlkXw"
+                "ENVIRONMENT": "development"
             }
         },
     ]

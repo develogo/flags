@@ -104,14 +104,14 @@ func newTestServer(t *testing.T, relayURL string) *echo.Echo {
 
 	e := fxserver.ProvideEcho()
 	fxserver.MountRoutes(fxserver.RouteParams{
-		Echo:                e,
-		FlagsHandler:        handlers.NewFlagsHandler(evaluator, registry, logger),
-		HealthHandler:       handlers.NewHealthHandler(evaluator, registry, logger),
-		AuthMiddleware:      middleware.NewAuthMiddleware(services.NewKeycloakService(cfg, logger)),
-		RateLimiter:         middleware.NewRateLimiter(cfg),
-		CORSMiddleware:      middleware.CORS(cfg),
-		LoggerMiddleware:    middleware.Logger(logger),
-		RequestIDMiddleware: middleware.RequestID(),
+		Echo:                    e,
+		FlagsHandler:            handlers.NewFlagsHandler(evaluator, registry, logger),
+		HealthHandler:           handlers.NewHealthHandler(evaluator, registry, logger),
+		RateLimiter:             middleware.NewRateLimiter(cfg),
+		ClientContextMiddleware: middleware.ClientContext(),
+		CORSMiddleware:          middleware.CORS(cfg),
+		LoggerMiddleware:        middleware.Logger(logger),
+		RequestIDMiddleware:     middleware.RequestID(),
 	})
 	return e
 }
@@ -159,6 +159,63 @@ func TestFlags_ReturnsRelayValuesForPublicApp(t *testing.T) {
 			assert.ElementsMatch(t, []string{"dark_mode", "app_version"}, flags)
 		})
 	}
+}
+
+func TestFlags_UserIDIsTargetingKeyAndDeviceIDStaysAttribute(t *testing.T) {
+	relay := newFakeRelay(t, map[string]any{"dark_mode": true, "app_version": "2.0.0"})
+	e := newTestServer(t, relay.URL)
+
+	rec := get(e, "/api/v1/flags?app=flutter", map[string]string{
+		"User-ID":     "user-42",
+		"Device-ID":   "device-1",
+		"Platform":    "ios",
+		"App-Version": "3.1.0",
+	})
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	requests := relay.Requests()
+	require.NotEmpty(t, requests)
+	for _, r := range requests {
+		assert.Equal(t, "user-42", r.Context.Key)
+		// O provider GOFF replica a targeting key em custom; não é atributo nosso.
+		delete(r.Context.Custom, "targetingKey")
+		assert.Equal(t, map[string]any{
+			"user_id":     "user-42",
+			"device_id":   "device-1",
+			"platform":    "ios",
+			"app_version": "3.1.0",
+		}, r.Context.Custom)
+	}
+}
+
+func TestFlags_UserIDWithoutDeviceIDOmitsDeviceAttribute(t *testing.T) {
+	relay := newFakeRelay(t, map[string]any{"dark_mode": true, "app_version": "2.0.0"})
+	e := newTestServer(t, relay.URL)
+
+	rec := get(e, "/api/v1/flags?app=flutter", map[string]string{"User-ID": "user-42"})
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	requests := relay.Requests()
+	require.NotEmpty(t, requests)
+	for _, r := range requests {
+		assert.Equal(t, "user-42", r.Context.Key)
+		assert.Equal(t, "user-42", r.Context.Custom["user_id"])
+		assert.NotContains(t, r.Context.Custom, "device_id")
+	}
+}
+
+func TestFlags_AuthorizationHeaderIsIgnored(t *testing.T) {
+	relay := newFakeRelay(t, map[string]any{"dark_mode": true, "app_version": "2.0.0"})
+	e := newTestServer(t, relay.URL)
+	headers := map[string]string{"Device-ID": "device-1", "Platform": "android", "App-Version": "3.1.0"}
+
+	plain := get(e, "/api/v1/flags?app=flutter", headers)
+	headers["Authorization"] = "Bearer lixo"
+	withToken := get(e, "/api/v1/flags?app=flutter", headers)
+
+	require.Equal(t, http.StatusOK, plain.Code)
+	assert.Equal(t, plain.Code, withToken.Code)
+	assert.JSONEq(t, plain.Body.String(), withToken.Body.String())
 }
 
 func TestFlags_UnknownAppIsRejectedWithoutCallingRelay(t *testing.T) {
