@@ -61,7 +61,7 @@ Um app é um arquivo `flags/apps/<app>.yaml` no formato GOFF. O nome do arquivo 
 | `bettercity-flutter` | sim | App Flutter, via Flag API |
 | `bettercity-api` | não | Backend Go do BetterCity, via SDK no relay |
 
-Nomes de flag podem se repetir entre apps (`maintenance_mode` existe nos dois) sem conflito.
+Nomes de flag podem se repetir entre apps sem conflito.
 
 ### Adicionar um app
 
