@@ -21,6 +21,7 @@ const DefaultFlagsDir = "flags/apps"
 var ServedApps = []string{"flutter"}
 
 type FlagRegistryService struct {
+	order  []string // apps na ordem de registro
 	apps   map[string][]models.FlagDefinition
 	logger *slog.Logger
 }
@@ -53,7 +54,7 @@ func NewFlagRegistryService(dir string, apps []string, logger *slog.Logger) (*Fl
 		logger.Info("registered app flags", slog.String("app", appName), slog.Int("flags", len(flags)))
 	}
 
-	return &FlagRegistryService{apps: registry, logger: logger}, nil
+	return &FlagRegistryService{order: append([]string(nil), apps...), apps: registry, logger: logger}, nil
 }
 
 func (r *FlagRegistryService) GetFlagsForApp(appName string) ([]models.FlagDefinition, error) {
@@ -64,13 +65,14 @@ func (r *FlagRegistryService) GetFlagsForApp(appName string) ([]models.FlagDefin
 	return flags, nil
 }
 
-func (r *FlagRegistryService) GetAnyFlags() ([]models.FlagDefinition, error) {
-	for _, flags := range r.apps {
-		if len(flags) > 0 {
-			return flags, nil
+// GetAnyApp devolve o primeiro app servido (na ordem de registro) que tem flags.
+func (r *FlagRegistryService) GetAnyApp() (string, []models.FlagDefinition, error) {
+	for _, appName := range r.order {
+		if flags := r.apps[appName]; len(flags) > 0 {
+			return appName, flags, nil
 		}
 	}
-	return nil, fmt.Errorf("no flags registered")
+	return "", nil, fmt.Errorf("no flags registered")
 }
 
 func loadGoffFlags(filePath string) ([]models.FlagDefinition, error) {

@@ -6,8 +6,8 @@ import (
 )
 
 type FeatureFlagEvaluator interface {
-	EvaluateFlags(ctx context.Context, flags []models.FlagDefinition, clientCtx *models.ClientContext) (map[string]interface{}, error)
-	HealthCheck(ctx context.Context, flags []models.FlagDefinition) error
+	EvaluateFlags(ctx context.Context, app string, flags []models.FlagDefinition, clientCtx *models.ClientContext) (map[string]interface{}, error)
+	HealthCheck(ctx context.Context, app string, flags []models.FlagDefinition) error
 }
 
 type TokenValidator interface {
@@ -16,5 +16,5 @@ type TokenValidator interface {
 
 type FlagRegistry interface {
 	GetFlagsForApp(appName string) ([]models.FlagDefinition, error)
-	GetAnyFlags() ([]models.FlagDefinition, error)
+	GetAnyApp() (string, []models.FlagDefinition, error)
 }

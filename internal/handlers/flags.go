@@ -49,7 +49,7 @@ func (h *FlagsHandler) GetFlags(c echo.Context) error {
 		slog.Bool("authenticated", clientCtx.IsAuthenticated()),
 	)
 
-	flags, err := h.evaluator.EvaluateFlags(ctx, flagDefs, clientCtx)
+	flags, err := h.evaluator.EvaluateFlags(ctx, appName, flagDefs, clientCtx)
 	if err != nil {
 		h.logger.Error("failed to evaluate flags", slog.String("error", err.Error()))
 		return c.JSON(http.StatusInternalServerError, models.ErrorResponse{

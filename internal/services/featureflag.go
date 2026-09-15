@@ -35,7 +35,7 @@ func NewFeatureFlagService(cfg *config.Config, logger *slog.Logger) (*FeatureFla
 	}, nil
 }
 
-func (s *FeatureFlagService) EvaluateFlags(ctx context.Context, flagDefs []models.FlagDefinition, clientCtx *models.ClientContext) (map[string]interface{}, error) {
+func (s *FeatureFlagService) EvaluateFlags(ctx context.Context, app string, flagDefs []models.FlagDefinition, clientCtx *models.ClientContext) (map[string]interface{}, error) {
 	evalCtx := s.buildEvaluationContext(clientCtx)
 	flags := make(map[string]interface{}, len(flagDefs))
 	defaultedCount := 0
@@ -148,6 +148,7 @@ func (s *FeatureFlagService) EvaluateFlags(ctx context.Context, flagDefs []model
 	}
 
 	s.logger.Info("all flags evaluated",
+		slog.String("app", app),
 		slog.Int("count", len(flags)),
 		slog.Int("defaulted", defaultedCount),
 		slog.String("targeting_key", clientCtx.GetTargetingKey()),
@@ -176,11 +177,13 @@ func (s *FeatureFlagService) buildEvaluationContext(clientCtx *models.ClientCont
 	)
 }
 
-func (s *FeatureFlagService) HealthCheck(ctx context.Context, flags []models.FlagDefinition) error {
+func (s *FeatureFlagService) HealthCheck(ctx context.Context, app string, flags []models.FlagDefinition) error {
 	if len(flags) == 0 {
-		return fmt.Errorf("no flags available for health check")
+		return fmt.Errorf("no flags available for health check in app %q", app)
 	}
 	evalCtx := of.NewEvaluationContext("health-check", map[string]interface{}{})
-	_, err := s.client.BooleanValue(ctx, flags[0].Name, false, evalCtx)
+	// ObjectValue aceita qualquer tipo de variation: o health check só prova
+	// que o relay avalia, não importa o tipo do primeiro flag.
+	_, err := s.client.ObjectValue(ctx, flags[0].Name, flags[0].Default, evalCtx)
 	return err
 }

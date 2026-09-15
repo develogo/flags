@@ -32,7 +32,7 @@ func (h *HealthHandler) Health(c echo.Context) error {
 func (h *HealthHandler) Ready(c echo.Context) error {
 	ctx := c.Request().Context()
 
-	flags, err := h.registry.GetAnyFlags()
+	app, flags, err := h.registry.GetAnyApp()
 	if err != nil {
 		h.logger.Error("readiness check failed: no flags available", slog.String("error", err.Error()))
 		return c.JSON(http.StatusServiceUnavailable, models.HealthResponse{
@@ -41,8 +41,8 @@ func (h *HealthHandler) Ready(c echo.Context) error {
 		})
 	}
 
-	if err := h.evaluator.HealthCheck(ctx, flags); err != nil {
-		h.logger.Error("readiness check failed", slog.String("error", err.Error()))
+	if err := h.evaluator.HealthCheck(ctx, app, flags); err != nil {
+		h.logger.Error("readiness check failed", slog.String("app", app), slog.String("error", err.Error()))
 		return c.JSON(http.StatusServiceUnavailable, models.HealthResponse{
 			Status:  "unavailable",
 			Message: "GO Feature Flag service is not available",

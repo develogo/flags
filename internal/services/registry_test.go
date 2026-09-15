@@ -88,12 +88,13 @@ func TestFlagRegistry_RejectsInvalidFlags(t *testing.T) {
 	}
 }
 
-func TestFlagRegistry_GetAnyFlags(t *testing.T) {
+func TestFlagRegistry_GetAnyApp(t *testing.T) {
 	registry, err := services.NewFlagRegistryService(appsDir, []string{"flutter"}, testLogger())
 	require.NoError(t, err)
 
-	flags, err := registry.GetAnyFlags()
+	app, flags, err := registry.GetAnyApp()
 	require.NoError(t, err)
+	assert.Equal(t, "flutter", app)
 	assert.NotEmpty(t, flags)
 }
 
