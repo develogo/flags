@@ -13,7 +13,7 @@ Feature flag service shared across projects (BetterCity and others), on top of a
 `make help` lists the targets. What the Makefile does not tell you:
 
 - `make run` sets `APP_ENV=local` and expects the relay on `localhost:1031`. Run it from the repo root: `flags/apps` is resolved relative to the cwd (there is no config key for it).
-- `make up` requires the external Docker network `bettercity_local` to already exist (`docker network create bettercity_local`); compose does not create it. Relay on `:1031`, API on `:1324`.
+- `make up` requires the external Docker network `flags_local` to already exist (`docker network create flags_local`); compose does not create it. Relay on `:1031`, API on `:1324`.
 - `make test` runs `go test ./... -race -v`. Registry fixtures (valid and invalid GOFF files) live in `testdata/`.
 - `go run . relay-config` prints the relay config the relay image is built with (`--apps-dir`, `-o`).
 

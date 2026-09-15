@@ -1,7 +1,7 @@
 package middleware_test
 
 import (
-	"better-feature-flag/internal/middleware"
+	"flags/internal/middleware"
 	"net/http"
 	"net/http/httptest"
 	"testing"

@@ -1,4 +1,4 @@
-# Better Feature Flag
+# Flags
 
 Serviço de feature flags compartilhado entre projetos, sobre o GO Feature Flag (GOFF). Cada **App** tem o próprio arquivo de flags e enxerga só as próprias flags. Backends na rede interna leem o relay GOFF direto via SDK OpenFeature. Apps mobile (e web) leem pela Flag API, que avalia todas as flags de um **App público** numa chamada só.
 
@@ -42,7 +42,7 @@ internal/
 ## Como executar
 
 ```bash
-docker network create bettercity_local   # uma vez; o compose não cria a rede
+docker network create flags_local   # uma vez; o compose não cria a rede
 make up       # Sobe relay (:1031) + API (:1324)
 make run      # Roda a API localmente (relay em localhost:1031); rode da raiz do repo
 make test     # Roda os testes

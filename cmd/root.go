@@ -8,7 +8,7 @@ import (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "better-feature-flag",
+	Use:   "flags",
 	Short: "A feature flag proxy server",
 	Long:  `A feature flag proxy server that integrates with GO Feature Flag.`,
 }

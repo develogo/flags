@@ -1,7 +1,7 @@
 package middleware
 
 import (
-	"better-feature-flag/internal/models"
+	"flags/internal/models"
 
 	"github.com/labstack/echo/v4"
 )

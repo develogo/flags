@@ -44,10 +44,10 @@ jobs:
       - name: Build, push and open PR in stacks
         uses: ./git-actions/actions/build_push_and_update_stacks
         with:
-          image_name: bettercity-flags
-          image_repo: develogo/bettercity-flags
+          image_name: flags-relay
+          image_repo: develogo/flags-relay
           stacks_repo: develogo/stacks
-          stacks_compose_path: stacks/bettercity-feature-flag/docker-compose.yml
+          stacks_compose_path: stacks/flags/docker-compose.yml
           stacks_repo_token: ${{ secrets.STACKS_REPO_TOKEN }}
           dockerfile_path: Dockerfile
           context: .
@@ -73,10 +73,10 @@ jobs:
       - name: Build, push and open PR in stacks
         uses: ./git-actions/actions/build_push_and_update_stacks
         with:
-          image_name: better-feature-flag
-          image_repo: develogo/better-feature-flag
+          image_name: flags-api
+          image_repo: develogo/flags-api
           stacks_repo: develogo/stacks
-          stacks_compose_path: stacks/bettercity-feature-flag/docker-compose.yml
+          stacks_compose_path: stacks/flags/docker-compose.yml
           stacks_repo_token: ${{ secrets.STACKS_REPO_TOKEN }}
           dockerfile_path: Dockerfile.api
           context: .

@@ -1,12 +1,12 @@
 package fx_test
 
 import (
-	"better-feature-flag/internal/config"
-	fxserver "better-feature-flag/internal/fx"
-	"better-feature-flag/internal/handlers"
-	"better-feature-flag/internal/middleware"
-	"better-feature-flag/internal/services"
 	"encoding/json"
+	"flags/internal/config"
+	fxserver "flags/internal/fx"
+	"flags/internal/handlers"
+	"flags/internal/middleware"
+	"flags/internal/services"
 	"io"
 	"log/slog"
 	"net/http"

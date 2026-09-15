@@ -1,8 +1,8 @@
 package middleware
 
 import (
-	"better-feature-flag/internal/config"
-	"better-feature-flag/internal/models"
+	"flags/internal/config"
+	"flags/internal/models"
 	"net/http"
 	"sync"
 	"time"

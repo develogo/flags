@@ -23,5 +23,5 @@ services:
 
 networks:
   default:
-    name: bettercity_local
+    name: flags_local
     external: true
