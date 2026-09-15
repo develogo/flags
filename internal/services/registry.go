@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -19,6 +20,29 @@ const DefaultFlagsDir = "flags/apps"
 // <flags dir>/<app>.yaml — o mesmo arquivo que o relay carrega. Backends
 // consomem o relay direto via SDK; os flags deles não passam por aqui.
 var ServedApps = []string{"flutter"}
+
+// DiscoverApps lista os apps de dir: um app por arquivo <app>.yaml, com o nome
+// do arquivo sem extensão como nome do app. É a regra única de descoberta, usada
+// pelo gerador da config do relay e disponível para a API. Diretório ausente ou
+// sem apps é erro.
+func DiscoverApps(dir string) ([]string, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read apps dir %s: %w", dir, err)
+	}
+
+	var apps []string
+	for _, entry := range entries {
+		if entry.IsDir() || filepath.Ext(entry.Name()) != ".yaml" {
+			continue
+		}
+		apps = append(apps, strings.TrimSuffix(entry.Name(), ".yaml"))
+	}
+	if len(apps) == 0 {
+		return nil, fmt.Errorf("no apps found in %s", dir)
+	}
+	return apps, nil
+}
 
 type FlagRegistryService struct {
 	order  []string // apps na ordem de registro

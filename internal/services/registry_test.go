@@ -5,6 +5,7 @@ import (
 	"better-feature-flag/internal/services"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -123,4 +124,56 @@ func TestFlagRegistry_LoadsRealServedApps(t *testing.T) {
 		require.NoError(t, err)
 		assert.NotEmpty(t, flags, app)
 	}
+}
+
+func TestDiscoverApps(t *testing.T) {
+	apps, err := services.DiscoverApps(appsDir)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"backend", "flutter", "typed"}, apps)
+}
+
+func TestDiscoverApps_IgnoresNonYAMLAndSubdirs(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "app.yaml"), nil, 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "README.md"), nil, 0o644))
+	require.NoError(t, os.Mkdir(filepath.Join(dir, "nested.yaml"), 0o755))
+
+	apps, err := services.DiscoverApps(dir)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"app"}, apps)
+}
+
+func TestDiscoverApps_EmptyOrMissingDir(t *testing.T) {
+	_, err := services.DiscoverApps(t.TempDir())
+	assert.Error(t, err)
+
+	_, err = services.DiscoverApps(filepath.Join(t.TempDir(), "missing"))
+	assert.Error(t, err)
+}
+
+// Um arquivo inválido de um app não servido não impede o boot.
+func TestFlagRegistry_InvalidPrivateAppDoesNotBlockBoot(t *testing.T) {
+	dir := t.TempDir()
+	valid, err := os.ReadFile(filepath.Join(appsDir, "flutter.yaml"))
+	require.NoError(t, err)
+	invalid, err := os.ReadFile(filepath.Join(invalidDir, "mixed.yaml"))
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "flutter.yaml"), valid, 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "private.yaml"), invalid, 0o644))
+
+	registry, err := services.NewFlagRegistryService(dir, []string{"flutter"}, testLogger())
+	require.NoError(t, err)
+	_, err = registry.GetFlagsForApp("flutter")
+	assert.NoError(t, err)
+}
+
+// Valida todos os apps reais do repositório com as mesmas invariantes do boot,
+// para que um arquivo quebrado de qualquer app reprove o CI.
+func TestFlagRegistry_LoadsAllRealApps(t *testing.T) {
+	dir := "../../" + services.DefaultFlagsDir
+	apps, err := services.DiscoverApps(dir)
+	require.NoError(t, err)
+
+	_, err = services.NewFlagRegistryService(dir, apps, testLogger())
+	require.NoError(t, err)
 }
