@@ -30,9 +30,9 @@ func TestGenerate_OneFlagSetPerApp(t *testing.T) {
 		set := raw.(map[string]any)
 		byName[set["name"].(string)] = set
 	}
-	require.Len(t, byName, 3)
+	require.Len(t, byName, 4)
 
-	for _, app := range []string{"backend", "flutter", "typed"} {
+	for _, app := range []string{"backend", "bettercity-flutter", "other", "typed"} {
 		set, ok := byName[app]
 		require.True(t, ok, app)
 		assert.Equal(t, []any{app}, set["apiKeys"], app)

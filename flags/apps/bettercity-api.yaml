@@ -1,4 +1,4 @@
-# ===== GO API =====
+# ===== BETTERCITY API (Go) =====
 # Values compensate the API-side Earth-radius fix (better-city-api-go PR #20):
 # previously calcDistanceInMeters scaled distances by ~0.215× due to a wrong
 # constant, so 25000 effectively gated viewports of ~116 km real diagonal.
@@ -21,3 +21,34 @@ security_middlewares_enabled:
     disabled: false
   defaultRule:
     variation: enabled
+
+maintenance_mode:
+  variations:
+    active: true
+    inactive: false
+  defaultRule:
+    variation: inactive
+
+redis_cache_enabled:
+  variations:
+    enabled: true
+    disabled: false
+  defaultRule:
+    variation: enabled
+
+log_level:
+  variations:
+    debug: "debug"
+    info: "info"
+    warn: "warn"
+    error: "error"
+  defaultRule:
+    variation: warn
+
+rate_limit_enabled:
+  variations:
+    enabled: true
+    disabled: false
+  defaultRule:
+    variation: enabled
+

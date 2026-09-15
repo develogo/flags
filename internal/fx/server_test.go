@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -24,6 +25,7 @@ const testAppsDir = "../../testdata/apps"
 
 // relayRequest é o que o relay fake recebeu numa avaliação.
 type relayRequest struct {
+	Key     string // API key recebida, que seleciona o flag set
 	Flag    string
 	Header  http.Header
 	Context struct {
@@ -33,24 +35,81 @@ type relayRequest struct {
 }
 
 // fakeRelay imita o endpoint de avaliação do relay GOFF
-// (POST /v1/feature/<flag>/eval) e registra cada requisição recebida.
+// (POST /v1/feature/<flag>/eval) com um flag set por app: a API key
+// (Authorization: Bearer <app>) escolhe o flag set. Registra cada requisição.
 type fakeRelay struct {
 	*httptest.Server
 
 	mu       sync.Mutex
-	values   map[string]any
+	flagSets map[string]map[string]any // app -> flag -> valor
+	down     bool
 	requests []relayRequest
 }
 
-func newFakeRelay(t *testing.T, values map[string]any) *fakeRelay {
+// publicApps são os apps públicos de fixture; backend fica privado.
+var publicApps = []string{"bettercity-flutter", "other"}
+
+// flutterFlagSet são os valores do relay para bettercity-flutter.
+var flutterFlagSet = map[string]map[string]any{
+	"bettercity-flutter": {"dark_mode": true, "app_version": "2.0.0"},
+}
+
+// O relay fake e o evaluator são únicos no pacote. Ao registrar um provider, o
+// OpenFeature SDK compara por reflexão os providers já ativos, inclusive o
+// http.Transport deles; criar providers a cada teste disputaria com as conexões
+// de testes anteriores. Em produção os providers são criados uma vez no boot.
+var (
+	sharedRelay *fakeRelay
+	evaluator   *services.FeatureFlagService
+)
+
+func TestMain(m *testing.M) {
+	sharedRelay = &fakeRelay{}
+	sharedRelay.Server = httptest.NewServer(http.HandlerFunc(sharedRelay.serveEval))
+
+	cfg := &config.Config{Goff: config.GoffConfig{Endpoint: sharedRelay.URL}}
+	var err error
+	evaluator, err = services.NewFeatureFlagService(cfg, publicApps, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err != nil {
+		panic(err)
+	}
+
+	code := m.Run()
+	sharedRelay.Close()
+	os.Exit(code)
+}
+
+// newFakeRelay prepara o relay fake do pacote para o teste: flag sets dados,
+// relay no ar e nenhuma requisição registrada.
+func resetRelay(t *testing.T, flagSets map[string]map[string]any) *fakeRelay {
 	t.Helper()
-	relay := &fakeRelay{values: values}
-	relay.Server = httptest.NewServer(http.HandlerFunc(relay.serveEval))
-	t.Cleanup(relay.Close)
-	return relay
+	sharedRelay.mu.Lock()
+	defer sharedRelay.mu.Unlock()
+	sharedRelay.flagSets = flagSets
+	sharedRelay.down = false
+	sharedRelay.requests = nil
+	return sharedRelay
+}
+
+// GoDown faz o relay derrubar toda conexão sem responder, como um relay fora do ar.
+func (r *fakeRelay) GoDown() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.down = true
 }
 
 func (r *fakeRelay) serveEval(w http.ResponseWriter, req *http.Request) {
+	r.mu.Lock()
+	down := r.down
+	r.mu.Unlock()
+	if down {
+		conn, _, err := w.(http.Hijacker).Hijack()
+		if err == nil {
+			conn.Close()
+		}
+		return
+	}
+
 	flag, ok := strings.CutPrefix(req.URL.Path, "/v1/feature/")
 	flag, ok2 := strings.CutSuffix(flag, "/eval")
 	if req.Method != http.MethodPost || !ok || !ok2 {
@@ -62,7 +121,8 @@ func (r *fakeRelay) serveEval(w http.ResponseWriter, req *http.Request) {
 		EvaluationContext json.RawMessage `json:"evaluationContext"`
 	}
 	data, _ := io.ReadAll(req.Body)
-	recorded := relayRequest{Flag: flag, Header: req.Header.Clone()}
+	key, _ := strings.CutPrefix(req.Header.Get("Authorization"), "Bearer ")
+	recorded := relayRequest{Key: key, Flag: flag, Header: req.Header.Clone()}
 	if err := json.Unmarshal(data, &body); err != nil || json.Unmarshal(body.EvaluationContext, &recorded.Context) != nil {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
@@ -70,8 +130,14 @@ func (r *fakeRelay) serveEval(w http.ResponseWriter, req *http.Request) {
 
 	r.mu.Lock()
 	r.requests = append(r.requests, recorded)
-	value, found := r.values[flag]
+	flagSet, knownKey := r.flagSets[key]
+	value, found := flagSet[flag]
 	r.mu.Unlock()
+
+	if !knownKey {
+		http.Error(w, `{"message":"invalid key"}`, http.StatusUnauthorized)
+		return
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	if !found {
@@ -88,18 +154,13 @@ func (r *fakeRelay) Requests() []relayRequest {
 }
 
 // newTestServer monta as rotas Echo reais, com toda a pilha de middlewares,
-// sobre o registry de fixtures e o evaluator real apontando para relayURL.
-func newTestServer(t *testing.T, relayURL string) *echo.Echo {
+// sobre o registry de fixtures e o evaluator do pacote.
+func newTestServer(t *testing.T) *echo.Echo {
 	t.Helper()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	cfg := &config.Config{
-		App:  config.AppConfig{Port: "0", RateLimit: 100},
-		Goff: config.GoffConfig{Endpoint: relayURL},
-	}
+	cfg := &config.Config{App: config.AppConfig{Port: "0", RateLimit: 100}}
 
-	evaluator, err := services.NewFeatureFlagService(cfg, logger)
-	require.NoError(t, err)
-	registry, err := services.NewFlagRegistryService(testAppsDir, services.ServedApps, logger)
+	registry, err := services.NewFlagRegistryService(testAppsDir, publicApps, logger)
 	require.NoError(t, err)
 
 	e := fxserver.ProvideEcho()
@@ -135,11 +196,12 @@ func decodeFlags(t *testing.T, rec *httptest.ResponseRecorder) map[string]any {
 	return body.Flags
 }
 
-func TestFlags_ReturnsRelayValuesForPublicApp(t *testing.T) {
-	for _, target := range []string{"/api/v1/flags?app=flutter", "/api/v1/flags"} {
+// Rota legada: sem app e com app=flutter, atende bettercity-flutter.
+func TestFlags_LegacyRouteServesBetterCityFlutter(t *testing.T) {
+	for _, target := range []string{"/api/v1/flags?app=flutter", "/api/v1/flags", "/api/v1/flags?app=bettercity-flutter"} {
 		t.Run(target, func(t *testing.T) {
-			relay := newFakeRelay(t, map[string]any{"dark_mode": true, "app_version": "2.0.0"})
-			e := newTestServer(t, relay.URL)
+			relay := resetRelay(t, flutterFlagSet)
+			e := newTestServer(t)
 
 			rec := get(e, target, map[string]string{"Device-ID": "device-1", "Platform": "android", "App-Version": "3.1.0"})
 
@@ -151,6 +213,7 @@ func TestFlags_ReturnsRelayValuesForPublicApp(t *testing.T) {
 			flags := make([]string, 0, len(requests))
 			for _, r := range requests {
 				flags = append(flags, r.Flag)
+				assert.Equal(t, "bettercity-flutter", r.Key)
 				assert.Equal(t, "device-1", r.Context.Key)
 				assert.Equal(t, "android", r.Context.Custom["platform"])
 				assert.Equal(t, "3.1.0", r.Context.Custom["app_version"])
@@ -162,8 +225,8 @@ func TestFlags_ReturnsRelayValuesForPublicApp(t *testing.T) {
 }
 
 func TestFlags_UserIDIsTargetingKeyAndDeviceIDStaysAttribute(t *testing.T) {
-	relay := newFakeRelay(t, map[string]any{"dark_mode": true, "app_version": "2.0.0"})
-	e := newTestServer(t, relay.URL)
+	relay := resetRelay(t, flutterFlagSet)
+	e := newTestServer(t)
 
 	rec := get(e, "/api/v1/flags?app=flutter", map[string]string{
 		"User-ID":     "user-42",
@@ -189,8 +252,8 @@ func TestFlags_UserIDIsTargetingKeyAndDeviceIDStaysAttribute(t *testing.T) {
 }
 
 func TestFlags_UserIDWithoutDeviceIDOmitsDeviceAttribute(t *testing.T) {
-	relay := newFakeRelay(t, map[string]any{"dark_mode": true, "app_version": "2.0.0"})
-	e := newTestServer(t, relay.URL)
+	relay := resetRelay(t, flutterFlagSet)
+	e := newTestServer(t)
 
 	rec := get(e, "/api/v1/flags?app=flutter", map[string]string{"User-ID": "user-42"})
 
@@ -205,8 +268,8 @@ func TestFlags_UserIDWithoutDeviceIDOmitsDeviceAttribute(t *testing.T) {
 }
 
 func TestFlags_AuthorizationHeaderIsIgnored(t *testing.T) {
-	relay := newFakeRelay(t, map[string]any{"dark_mode": true, "app_version": "2.0.0"})
-	e := newTestServer(t, relay.URL)
+	resetRelay(t, flutterFlagSet)
+	e := newTestServer(t)
 	headers := map[string]string{"Device-ID": "device-1", "Platform": "android", "App-Version": "3.1.0"}
 
 	plain := get(e, "/api/v1/flags?app=flutter", headers)
@@ -218,21 +281,72 @@ func TestFlags_AuthorizationHeaderIsIgnored(t *testing.T) {
 	assert.JSONEq(t, plain.Body.String(), withToken.Body.String())
 }
 
-func TestFlags_UnknownAppIsRejectedWithoutCallingRelay(t *testing.T) {
-	relay := newFakeRelay(t, map[string]any{"dark_mode": true})
-	e := newTestServer(t, relay.URL)
+func TestFlags_SameFlagInTwoAppsReturnsEachAppValue(t *testing.T) {
+	resetRelay(t, map[string]map[string]any{
+		"bettercity-flutter": {"dark_mode": true, "app_version": "2.0.0"},
+		"other":              {"dark_mode": false},
+	})
+	e := newTestServer(t)
 
-	rec := get(e, "/api/v1/flags?app=backend", nil)
+	flutter := get(e, "/api/v1/flags?app=bettercity-flutter", nil)
+	other := get(e, "/api/v1/flags?app=other", nil)
 
-	assert.Equal(t, http.StatusBadRequest, rec.Code)
-	assert.JSONEq(t, `{"error":"Unknown application: backend"}`, rec.Body.String())
+	require.Equal(t, http.StatusOK, flutter.Code)
+	require.Equal(t, http.StatusOK, other.Code)
+	assert.Equal(t, true, decodeFlags(t, flutter)["dark_mode"])
+	assert.Equal(t, map[string]any{"dark_mode": false}, decodeFlags(t, other))
+}
+
+func TestFlags_ConcurrentRequestsForDifferentApps(t *testing.T) {
+	resetRelay(t, map[string]map[string]any{
+		"bettercity-flutter": {"dark_mode": true, "app_version": "2.0.0"},
+		"other":              {"dark_mode": false},
+	})
+	e := newTestServer(t)
+	want := map[string]bool{"bettercity-flutter": true, "other": false}
+
+	type result struct {
+		app string
+		rec *httptest.ResponseRecorder
+	}
+	results := make(chan result, 20*len(want))
+	var wg sync.WaitGroup
+	for i := 0; i < 20; i++ {
+		for app := range want {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				results <- result{app, get(e, "/api/v1/flags?app="+app, nil)}
+			}()
+		}
+	}
+	wg.Wait()
+	close(results)
+
+	for r := range results {
+		require.Equal(t, http.StatusOK, r.rec.Code, r.app)
+		assert.Equal(t, want[r.app], decodeFlags(t, r.rec)["dark_mode"], r.app)
+	}
+}
+
+// App privado e app desconhecido recebem a mesma resposta, sem chamar o relay.
+func TestFlags_PrivateAndUnknownAppsAreIndistinguishable(t *testing.T) {
+	relay := resetRelay(t, map[string]map[string]any{"backend": {"cache_enabled": false}})
+	e := newTestServer(t)
+
+	for _, app := range []string{"backend", "nonexistent"} {
+		rec := get(e, "/api/v1/flags?app="+app, nil)
+
+		assert.Equal(t, http.StatusBadRequest, rec.Code, app)
+		assert.JSONEq(t, `{"error":"Unknown application: `+app+`"}`, rec.Body.String(), app)
+	}
 	assert.Empty(t, relay.Requests())
 }
 
 func TestFlags_RelayDownReturnsFileDefaults(t *testing.T) {
-	relay := newFakeRelay(t, map[string]any{"dark_mode": true, "app_version": "2.0.0"})
-	e := newTestServer(t, relay.URL)
-	relay.Close()
+	relay := resetRelay(t, flutterFlagSet)
+	e := newTestServer(t)
+	relay.GoDown()
 
 	rec := get(e, "/api/v1/flags?app=flutter", nil)
 
@@ -241,9 +355,9 @@ func TestFlags_RelayDownReturnsFileDefaults(t *testing.T) {
 }
 
 func TestHealth_AlwaysOK(t *testing.T) {
-	relay := newFakeRelay(t, nil)
-	e := newTestServer(t, relay.URL)
-	relay.Close()
+	relay := resetRelay(t, flutterFlagSet)
+	e := newTestServer(t)
+	relay.GoDown()
 
 	rec := get(e, "/health", nil)
 
@@ -252,20 +366,22 @@ func TestHealth_AlwaysOK(t *testing.T) {
 }
 
 func TestReady_PassesWithHealthyRelay(t *testing.T) {
-	relay := newFakeRelay(t, map[string]any{"dark_mode": true, "app_version": "2.0.0"})
-	e := newTestServer(t, relay.URL)
+	relay := resetRelay(t, flutterFlagSet)
+	e := newTestServer(t)
 
 	rec := get(e, "/ready", nil)
 
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.JSONEq(t, `{"status":"ready"}`, rec.Body.String())
-	assert.NotEmpty(t, relay.Requests())
+	requests := relay.Requests()
+	require.NotEmpty(t, requests)
+	assert.Equal(t, "bettercity-flutter", requests[0].Key)
 }
 
 func TestReady_FailsWithBrokenRelay(t *testing.T) {
-	relay := newFakeRelay(t, map[string]any{"dark_mode": true, "app_version": "2.0.0"})
-	e := newTestServer(t, relay.URL)
-	relay.Close()
+	relay := resetRelay(t, flutterFlagSet)
+	e := newTestServer(t)
+	relay.GoDown()
 
 	rec := get(e, "/ready", nil)
 

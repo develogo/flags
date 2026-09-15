@@ -19,7 +19,7 @@ const DefaultFlagsDir = "flags/apps"
 // ServedApps lista os apps que esta API serve. Cada entrada corresponde a
 // <flags dir>/<app>.yaml — o mesmo arquivo que o relay carrega. Backends
 // consomem o relay direto via SDK; os flags deles não passam por aqui.
-var ServedApps = []string{"flutter"}
+var ServedApps = []string{"bettercity-flutter"}
 
 // DiscoverApps lista os apps de dir: um app por arquivo <app>.yaml, com o nome
 // do arquivo sem extensão como nome do app. É a regra única de descoberta, usada

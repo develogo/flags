@@ -22,10 +22,10 @@ func testLogger() *slog.Logger {
 }
 
 func TestFlagRegistry_LoadValid(t *testing.T) {
-	registry, err := services.NewFlagRegistryService(appsDir, []string{"flutter"}, testLogger())
+	registry, err := services.NewFlagRegistryService(appsDir, []string{"bettercity-flutter"}, testLogger())
 	require.NoError(t, err)
 
-	flags, err := registry.GetFlagsForApp("flutter")
+	flags, err := registry.GetFlagsForApp("bettercity-flutter")
 	require.NoError(t, err)
 	require.Len(t, flags, 2)
 
@@ -47,7 +47,7 @@ func TestFlagRegistry_InfersIntAndFloat(t *testing.T) {
 }
 
 func TestFlagRegistry_UnknownApp(t *testing.T) {
-	registry, err := services.NewFlagRegistryService(appsDir, []string{"flutter"}, testLogger())
+	registry, err := services.NewFlagRegistryService(appsDir, []string{"bettercity-flutter"}, testLogger())
 	require.NoError(t, err)
 
 	_, err = registry.GetFlagsForApp("nonexistent")
@@ -56,7 +56,7 @@ func TestFlagRegistry_UnknownApp(t *testing.T) {
 }
 
 func TestFlagRegistry_AppNotServedEvenIfFileExists(t *testing.T) {
-	registry, err := services.NewFlagRegistryService(appsDir, []string{"flutter"}, testLogger())
+	registry, err := services.NewFlagRegistryService(appsDir, []string{"bettercity-flutter"}, testLogger())
 	require.NoError(t, err)
 
 	_, err = registry.GetFlagsForApp("backend")
@@ -90,20 +90,20 @@ func TestFlagRegistry_RejectsInvalidFlags(t *testing.T) {
 }
 
 func TestFlagRegistry_GetAnyApp(t *testing.T) {
-	registry, err := services.NewFlagRegistryService(appsDir, []string{"flutter"}, testLogger())
+	registry, err := services.NewFlagRegistryService(appsDir, []string{"bettercity-flutter"}, testLogger())
 	require.NoError(t, err)
 
 	app, flags, err := registry.GetAnyApp()
 	require.NoError(t, err)
-	assert.Equal(t, "flutter", app)
+	assert.Equal(t, "bettercity-flutter", app)
 	assert.NotEmpty(t, flags)
 }
 
 func TestFlagRegistry_MultipleApps(t *testing.T) {
-	registry, err := services.NewFlagRegistryService(appsDir, []string{"flutter", "backend"}, testLogger())
+	registry, err := services.NewFlagRegistryService(appsDir, []string{"bettercity-flutter", "backend"}, testLogger())
 	require.NoError(t, err)
 
-	flutter, err := registry.GetFlagsForApp("flutter")
+	flutter, err := registry.GetFlagsForApp("bettercity-flutter")
 	require.NoError(t, err)
 	assert.Len(t, flutter, 2)
 
@@ -129,7 +129,7 @@ func TestFlagRegistry_LoadsRealServedApps(t *testing.T) {
 func TestDiscoverApps(t *testing.T) {
 	apps, err := services.DiscoverApps(appsDir)
 	require.NoError(t, err)
-	assert.Equal(t, []string{"backend", "flutter", "typed"}, apps)
+	assert.Equal(t, []string{"backend", "bettercity-flutter", "other", "typed"}, apps)
 }
 
 func TestDiscoverApps_IgnoresNonYAMLAndSubdirs(t *testing.T) {
@@ -154,16 +154,16 @@ func TestDiscoverApps_EmptyOrMissingDir(t *testing.T) {
 // Um arquivo inválido de um app não servido não impede o boot.
 func TestFlagRegistry_InvalidPrivateAppDoesNotBlockBoot(t *testing.T) {
 	dir := t.TempDir()
-	valid, err := os.ReadFile(filepath.Join(appsDir, "flutter.yaml"))
+	valid, err := os.ReadFile(filepath.Join(appsDir, "bettercity-flutter.yaml"))
 	require.NoError(t, err)
 	invalid, err := os.ReadFile(filepath.Join(invalidDir, "mixed.yaml"))
 	require.NoError(t, err)
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "flutter.yaml"), valid, 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "bettercity-flutter.yaml"), valid, 0o644))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "private.yaml"), invalid, 0o644))
 
-	registry, err := services.NewFlagRegistryService(dir, []string{"flutter"}, testLogger())
+	registry, err := services.NewFlagRegistryService(dir, []string{"bettercity-flutter"}, testLogger())
 	require.NoError(t, err)
-	_, err = registry.GetFlagsForApp("flutter")
+	_, err = registry.GetFlagsForApp("bettercity-flutter")
 	assert.NoError(t, err)
 }
 

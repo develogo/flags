@@ -25,7 +25,7 @@ Feature flag proxy for BetterCity. Sits between the Flutter mobile app and a GO 
 **Routes** (`internal/fx/fx.go`):
 - `GET /health` — liveness, always 200
 - `GET /ready` — readiness; evaluates a flag against the relay
-- `GET /api/v1/flags?app=flutter` — bulk evaluation; `app` defaults to `flutter`
+- `GET /api/v1/flags?app=<app>` — bulk evaluation; missing `app` or `app=flutter` resolves to `bettercity-flutter` (legacy alias, handler only)
 
 Only the `/api/v1` group gets the per-IP rate limiter (`app.rate_limit`) and `ClientContext` (`internal/middleware/clientcontext.go`). It never rejects a request and has no auth: it reads the device headers (`Device-ID`, `Platform`, `App-Version`, …) plus optional `User-ID`; `Authorization` is ignored. Targeting key is `User-ID`, else `Device-ID`. `X-Request-ID` is generated or propagated on every request for log correlation.
 
@@ -35,16 +35,16 @@ Viper loads `config/{APP_ENV}.yaml` (`APP_ENV` defaults to `local`); env vars ov
 
 ## Flag Definitions
 
-The GOFF YAML files under `flags/` are the single source of truth — see `docs/adr/0001-goff-yaml-fonte-unica.md`. The relay serves all of them; the API reads only the apps listed in `ServedApps` (`internal/services/registry.go`, currently `flutter`):
+The GOFF YAML files under `flags/apps/` are the single source of truth — see `docs/adr/0001-goff-yaml-fonte-unica.md` and `docs/adr/0002-servico-multi-app-flag-set-por-app.md`. One file per app, the file name is the app name. The relay serves each app as a flag set whose API key is the app name; the API reads only the apps listed in `ServedApps` (`internal/services/registry.go`, currently `bettercity-flutter`) and evaluates them with one OpenFeature client per app:
 
-- `flags/apps/flutter.yaml` — served by relay and API
-- `flags/apps/api.yaml`, `flags/shared.yaml` — relay-only, consumed by backends via SDK. Keep them out of `ServedApps`: the API endpoint is unauthenticated.
+- `flags/apps/bettercity-flutter.yaml` — served by relay and API
+- `flags/apps/bettercity-api.yaml` — relay-only, consumed by the backend via SDK with `APIKey: "bettercity-api"`. Keep it out of `ServedApps`: the API endpoint is unauthenticated.
 
 Invariants the API enforces at startup (it refuses to boot otherwise): homogeneous scalar `variations` (bool/string/int/float) and a `defaultRule.variation` naming one of them. Percentage rollouts live in `targeting` rules, so `defaultRule` always resolves to a single fallback value. Flag names are **snake_case**. Adding a flag = editing the YAML; serving a new app = one entry in `ServedApps` plus `flags/apps/<app>.yaml`.
 
 ## Docker & CI
 
-- `Dockerfile` — relay image (GOFF relay proxy + `flags/` + `goff-proxy.yaml`)
+- `Dockerfile` — relay image: a Go stage runs `relay-config` to generate the relay config (one flag set per app); the pinned GOFF image gets `flags/` + the generated config. There is no versioned relay config file
 - `Dockerfile.api` — multi-stage API build; copies `config/` and `flags/` into the image
 
 `ci.yml` builds and pushes both images after the test job and opens a PR in `develogo/stacks`. Deploy details: `DEPLOYMENT.md`.
