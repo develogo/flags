@@ -9,9 +9,3 @@ app:
 goff:
   endpoint: "http://localhost:1031"
   environment: "development"
-
-keycloak:
-  url: "https://auth.bettercity.app"
-  realm: "bettercity"
-  client_id: "better-feature-flag"
-  client_secret: "" # Set via KEYCLOAK_CLIENT_SECRET env var or .env file

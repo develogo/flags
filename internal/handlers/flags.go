@@ -24,14 +24,25 @@ func NewFlagsHandler(evaluator services.FeatureFlagEvaluator, registry services.
 	}
 }
 
+// Rota legada: builds instalados do Flutter pedem sem app ou com o nome antigo
+// legacyAppName, e são atendidos como legacyRouteApp.
+const (
+	legacyAppName  = "flutter"
+	legacyRouteApp = "bettercity-flutter"
+)
+
+func resolveApp(app string) string {
+	if app == "" || app == legacyAppName {
+		return legacyRouteApp
+	}
+	return app
+}
+
 func (h *FlagsHandler) GetFlags(c echo.Context) error {
 	ctx := c.Request().Context()
 	clientCtx := middleware.GetClientContext(c)
 
-	appName := c.QueryParam("app")
-	if appName == "" {
-		appName = "flutter"
-	}
+	appName := resolveApp(c.QueryParam("app"))
 
 	flagDefs, err := h.registry.GetFlagsForApp(appName)
 	if err != nil {
@@ -46,12 +57,11 @@ func (h *FlagsHandler) GetFlags(c echo.Context) error {
 		slog.String("targeting_key", clientCtx.GetTargetingKey()),
 		slog.String("app_version", clientCtx.AppVersion),
 		slog.String("platform", clientCtx.Platform),
-		slog.Bool("authenticated", clientCtx.IsAuthenticated()),
 	)
 
-	flags, err := h.evaluator.EvaluateFlags(ctx, flagDefs, clientCtx)
+	flags, err := h.evaluator.EvaluateFlags(ctx, appName, flagDefs, clientCtx)
 	if err != nil {
-		h.logger.Error("failed to evaluate flags", slog.String("error", err.Error()))
+		h.logger.Error("failed to evaluate flags", slog.String("app", appName), slog.String("error", err.Error()))
 		return c.JSON(http.StatusInternalServerError, models.ErrorResponse{
 			Error: "Failed to evaluate feature flags",
 		})

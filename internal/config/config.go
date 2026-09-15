@@ -9,9 +9,8 @@ import (
 )
 
 type Config struct {
-	App      AppConfig      `mapstructure:"app"`
-	Goff     GoffConfig     `mapstructure:"goff"`
-	Keycloak KeycloakConfig `mapstructure:"keycloak"`
+	App  AppConfig  `mapstructure:"app"`
+	Goff GoffConfig `mapstructure:"goff"`
 }
 
 type AppConfig struct {
@@ -23,13 +22,6 @@ type AppConfig struct {
 
 type GoffConfig struct {
 	Endpoint string `mapstructure:"endpoint"`
-}
-
-type KeycloakConfig struct {
-	URL          string `mapstructure:"url"`
-	Realm        string `mapstructure:"realm"`
-	ClientID     string `mapstructure:"client_id"`
-	ClientSecret string `mapstructure:"client_secret"`
 }
 
 func Load() (*Config, error) {
@@ -89,22 +81,6 @@ func (c *Config) Validate() error {
 
 	if c.Goff.Endpoint == "" {
 		return fmt.Errorf("goff.endpoint cannot be empty")
-	}
-
-	if c.Keycloak.URL == "" {
-		return fmt.Errorf("keycloak.url is required")
-	}
-
-	if c.Keycloak.Realm == "" {
-		return fmt.Errorf("keycloak.realm is required")
-	}
-
-	if c.Keycloak.ClientID == "" {
-		return fmt.Errorf("keycloak.client_id is required")
-	}
-
-	if c.Keycloak.ClientSecret == "" {
-		return fmt.Errorf("keycloak.client_secret is required")
 	}
 
 	return nil

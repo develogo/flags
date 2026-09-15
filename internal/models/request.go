@@ -2,8 +2,6 @@ package models
 
 type ClientContext struct {
 	UserID          string
-	Email           string
-	Username        string
 	DeviceID        string
 	Platform        string
 	PlatformVersion string
@@ -26,8 +24,4 @@ func (c *ClientContext) GetTargetingKey() string {
 		return c.DeviceID
 	}
 	return "anonymous"
-}
-
-func (c *ClientContext) IsAuthenticated() bool {
-	return c.UserID != ""
 }

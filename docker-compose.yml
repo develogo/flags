@@ -1,11 +1,10 @@
 services:
   relay:
-    image: gofeatureflag/go-feature-flag:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
     ports:
       - "1031:1031"
-    volumes:
-      - ./flags:/goff/flags
-      - ./goff-proxy.yaml:/goff/goff-proxy.yaml
     restart: unless-stopped
 
   api:
@@ -16,7 +15,8 @@ services:
       - "1324:80"
     environment:
       - APP_ENV=local
-      - KEYCLOAK_CLIENT_SECRET=${KEYCLOAK_CLIENT_SECRET}
+      - APP_PORT=80
+      - GOFF_ENDPOINT=http://relay:1031
     depends_on:
       - relay
     restart: unless-stopped

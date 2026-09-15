@@ -50,17 +50,17 @@ func ProvideEcho() *echo.Echo {
 type RouteParams struct {
 	fx.In
 
-	Lifecycle           fx.Lifecycle
-	Logger              *slog.Logger
-	Config              *config.Config
-	Echo                *echo.Echo
-	FlagsHandler        *handlers.FlagsHandler
-	HealthHandler       *handlers.HealthHandler
-	AuthMiddleware      *middleware.AuthMiddleware
-	RateLimiter         *middleware.RateLimiter
-	CORSMiddleware      echo.MiddlewareFunc `name:"cors"`
-	LoggerMiddleware    echo.MiddlewareFunc `name:"logger"`
-	RequestIDMiddleware echo.MiddlewareFunc `name:"requestid"`
+	Lifecycle               fx.Lifecycle
+	Logger                  *slog.Logger
+	Config                  *config.Config
+	Echo                    *echo.Echo
+	FlagsHandler            *handlers.FlagsHandler
+	HealthHandler           *handlers.HealthHandler
+	RateLimiter             *middleware.RateLimiter
+	ClientContextMiddleware echo.MiddlewareFunc `name:"clientcontext"`
+	CORSMiddleware          echo.MiddlewareFunc `name:"cors"`
+	LoggerMiddleware        echo.MiddlewareFunc `name:"logger"`
+	RequestIDMiddleware     echo.MiddlewareFunc `name:"requestid"`
 }
 
 func RegisterRoutes(p RouteParams) {
@@ -71,20 +71,7 @@ func RegisterRoutes(p RouteParams) {
 		slog.String("port", p.Config.App.Port),
 	)
 
-	// Middlewares globais
-	p.Echo.Use(p.RequestIDMiddleware)
-	p.Echo.Use(p.CORSMiddleware)
-	p.Echo.Use(p.LoggerMiddleware)
-
-	// Health checks (sem autenticação)
-	p.Echo.GET("/health", p.HealthHandler.Health)
-	p.Echo.GET("/ready", p.HealthHandler.Ready)
-
-	// API routes
-	api := p.Echo.Group("/api/v1")
-	api.Use(p.RateLimiter.Middleware())
-	api.Use(p.AuthMiddleware.OptionalJWT())
-	api.GET("/flags", p.FlagsHandler.GetFlags)
+	MountRoutes(p)
 
 	// Lifecycle hooks
 	p.Lifecycle.Append(fx.Hook{
@@ -106,4 +93,23 @@ func RegisterRoutes(p RouteParams) {
 			return nil
 		},
 	})
+}
+
+// MountRoutes registra middlewares globais e rotas no Echo, sem iniciar o
+// servidor. Separado do lifecycle para os testes montarem a pilha HTTP real.
+func MountRoutes(p RouteParams) {
+	// Middlewares globais
+	p.Echo.Use(p.RequestIDMiddleware)
+	p.Echo.Use(p.CORSMiddleware)
+	p.Echo.Use(p.LoggerMiddleware)
+
+	// Health checks (sem rate limit)
+	p.Echo.GET("/health", p.HealthHandler.Health)
+	p.Echo.GET("/ready", p.HealthHandler.Ready)
+
+	// API routes
+	api := p.Echo.Group("/api/v1")
+	api.Use(p.RateLimiter.Middleware())
+	api.Use(p.ClientContextMiddleware)
+	api.GET("/flags", p.FlagsHandler.GetFlags)
 }

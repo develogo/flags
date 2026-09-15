@@ -21,6 +21,7 @@ func CORS(cfg *config.Config) echo.MiddlewareFunc {
 			echo.HeaderContentType,
 			echo.HeaderAccept,
 			echo.HeaderAuthorization,
+			"User-ID",
 			"Device-ID",
 			"Platform",
 			"Platform-Version",
