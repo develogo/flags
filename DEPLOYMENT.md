@@ -23,7 +23,7 @@ No push para `main` (ou tag `v*`), o `ci.yml`:
 2. Builda e publica as duas imagens:
    - `Dockerfile` (relay): um stage Go roda `go run . relay-config`, que gera a config do relay com **um flag set por arquivo em `flags/apps/`**. A imagem final (`gofeatureflag/go-feature-flag`, versão fixada) recebe `flags/` e a config gerada. Não existe config do relay versionada.
    - `Dockerfile.api` (Flag API): binário Go com `config/` e `flags/` embutidos.
-3. Abre um PR em `develogo/stacks` atualizando as imagens na stack. O deploy acontece quando esse PR é aplicado.
+3. Só no push para `main`: faz commit e push direto no `main` de `develogo/stacks`, trocando a tag `sha-<commit>` das duas imagens em `stacks/flags/docker-compose.yml` (sem PR). O orquestrador aplica a stack a partir daí. Tags `v*` publicam `vX.Y.Z` e não mexem na stack.
 
 As flags ficam embutidas nas imagens. Mudar uma flag ou adicionar um app é sempre commit, CI e deploy.
 
@@ -71,7 +71,7 @@ As duas chamadas de flags devem retornar as flags de `flags/apps/bettercity-flut
 
 ## Rollback
 
-Reverta o PR de imagens na stack em `develogo/stacks` (ou aponte as imagens para a tag anterior) e reaplique. Relay e API podem voltar juntos: as imagens de um mesmo commit sempre concordam sobre quais apps existem.
+Reverta em `develogo/stacks` os commits de bump das imagens (`chore: bump flags-relay …` e `chore: bump flags-api …`), ou aponte as imagens para a tag anterior, e reaplique. Relay e API podem voltar juntos: as imagens de um mesmo commit sempre concordam sobre quais apps existem.
 
 As imagens até a renomeação genérica foram publicadas como `develogo/bettercity-flags` (relay) e `develogo/better-feature-flag` (API), na stack `stacks/bettercity-feature-flag`; um rollback para antes dela aponta para esses nomes.
 

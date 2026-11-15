@@ -15,9 +15,7 @@
                 "server"
             ],
             "env": {
-                "SERVER_PORT": "1324",
-                "GOFF_ENDPOINT": "http://localhost:1031",
-                "ENVIRONMENT": "development"
+                "APP_ENV": "local"
             }
         },
     ]

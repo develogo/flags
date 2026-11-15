@@ -50,7 +50,7 @@ Invariants the API enforces at startup (it refuses to boot otherwise): homogeneo
 
 Flags are baked into both images: any flag change needs a build and deploy.
 
-`ci.yml` builds and pushes both images after the test job and opens a PR in `develogo/stacks`. Deploy details: `DEPLOYMENT.md`.
+`ci.yml` builds and pushes both images after the test job; on `main` it commits the new image tags straight to `main` of `develogo/stacks` (`stacks/flags/docker-compose.yml`), no PR. Deploy details: `DEPLOYMENT.md`.
 
 ## Agent skills
 
