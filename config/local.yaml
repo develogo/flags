@@ -1,11 +1,8 @@
 app:
-  version: "1.0.0"
   port: "1324"
-  mode: "local"
   log_level: "debug"
   cors_origins:
     - "*"
 
 goff:
   endpoint: "http://localhost:1031"
-  environment: "development"

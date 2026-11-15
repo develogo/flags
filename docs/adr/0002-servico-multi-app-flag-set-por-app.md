@@ -18,8 +18,9 @@ dois arquivos têm a mesma flag, o último vence em silêncio. Isso já acontece
 1. **App** é a unidade: nome plano e único global (`bettercity-flutter`, `bettercity-api`), um
    arquivo `flags/apps/<app>.yaml` por app, sem nível "projeto".
 2. Cada app vira um **flag set** do relay GOFF. A API key do flag set é o **nome do app**. Ela
-   funciona como seletor de namespace, não como segredo. O relay gera os flag sets no start a
-   partir dos arquivos em `flags/apps/`. Para criar um app, basta criar o arquivo.
+   funciona como seletor de namespace, não como segredo. Os flag sets são gerados a partir dos
+   arquivos em `flags/apps/` (na implementação, no build da imagem do relay, via
+   `relay-config`). Para criar um app, basta criar o arquivo.
 3. Não há autenticação. Quem sabe o nome do app lê as flags dele, então flag nunca guarda
    segredo. O isolamento entre apps é organizacional.
 4. O JWT/Keycloak sai da API. O targeting usa os headers `Device-ID`, `Platform`, `App-Version` e
